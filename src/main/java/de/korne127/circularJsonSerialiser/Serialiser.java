@@ -13,9 +13,10 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
- * Serialiser-Klasse<br>
+ * Serialiser-Klasse:<br>
  * Diese Klasse stellt einen Serialiser bereit, der ein angegebenes Objekt in ein JSON-Objekt umwandelt und
- * als String zurückgibt.
+ * als String zurückgibt, sowie einen Deserialiser, der ein angegebenes JSON-Objekt, welches durch den
+ * Serialiser berechnet wurde, zurück in ein Objekt umwandelt.
  * @author Korne127
  */
 public class Serialiser {
@@ -26,8 +27,8 @@ public class Serialiser {
 
 
 	/**
-	 * Konvertiert das angegebene Objekt zu einem JSON-Objekt, welches als String zurückgegeben wird<br>
-	 * Für Implementierungsdetails, siehe {@link #objectToJson(Object object)}
+	 * Konvertiert das angegebene Objekt zu einem JSON-Objekt, welches als String zurückgegeben wird.<br>
+	 * Für Implementierungsdetails, siehe {@link #objectToJson(Object object)}.
 	 * @param object Das Objekt, welches zu einem JSON-Objekt konvertiert werden soll
 	 * @return Das aus dem angegebenen Objekt kodierte JSON-Objekt
 	 */
@@ -43,7 +44,7 @@ public class Serialiser {
 	}
 
 	/**
-	 * Konvertiert rekursiv ein angegebenes Objekt zu einem für JSON benutzbares Objekt<br>
+	 * Konvertiert rekursiv ein angegebenes Objekt zu einem für JSON benutzbares Objekt:<br>
 	 * Falls das angegebene Objekt null oder {@link #isSimpleType(Class) simpel} ist, wird es zurückgegeben.<br>
 	 * Falls das angegebene Objekt bereits an einer anderen Stelle gespeichert wird, wird nur ein Verweis auf
 	 * diese Stelle gespeichert und zurückgegeben.<br>
@@ -162,6 +163,12 @@ public class Serialiser {
 		return outputArray;
 	}
 
+	/**
+	 * Berechnet aus dem angegebenen JSON-String ein Objekt, welches zurückgegeben wird.<br>
+	 * Für Implementierungsdetails, siehe {@link #jsonToObject(Object object)}.
+	 * @param content Der JSON-String, aus dem ein Objekt berechnet werden soll
+	 * @return Das aus dem angegebenen JSON-String berechnete Objekt
+	 */
 	public Object deserialiseObject(String content) {
 		hashTable = new HashMap<>();
 		wholeJson = new JSONObject(content);
@@ -176,8 +183,35 @@ public class Serialiser {
 		}
 	}
 
+	/**
+	 * Konvertiert rekursiv ein angegebenes für JSON benutzbares Objekt zu einem Objekt:<br>
+	 * Falls das angegebene Objekt null oder {@link #isSimpleType(Class) simpel} und kein Verweis ist,
+	 * wird es zurückgegeben.<br>
+	 * Falls das angegebene Objekt ein Verweis ist, wird das Objekt, auf das verwiesen wird berechnet
+	 * und zurückgegeben.<br>
+	 * Falls das angegebene Objekt ein kodiertes Array oder eine kodierte Collection ist, wird diese
+	 * Methode für jedes Element aufgerufen, die resultierenden Objekte in ein erstelltes Array /
+	 * eine erstellte Collection des ursprünglichen Typen gesetzt und dies zurückgegeben.<br>
+	 * Falls das angegebene Objekt eine kodierte Map ist, wird diese Methode für jeden key und
+	 * dazugehörigen value aufgerufen, die resultierenden Objekte passend in eine erstellte Map des
+	 * ursprünglichen Typen gesetzt und diese zurückgegeben.<br>
+	 * Ansonsten wird für jeden kodierten Feldinhalt dieses Objektes diese Methode aufgerufen und die
+	 * resultierenden Objekte in ein passendes erstelltes Objekt gesetzt und dies zurückgegeben.
+	 * @param json Das für JSON benutzbare Objekt, welches in ein Objekt umgewandelt werden soll
+	 * @return Das aus dem angegebenen für JSON benutzbare Objekt berechnete Objekt
+	 * @throws ClassNotFoundException Wird geworfen, falls eine der angegebenen Klassen eines Objektes
+	 * nicht gefunden wurde. Dies sollte im korrekten Ablauf nicht passieren.
+	 * @throws IllegalAccessException Wird geworfen, falls auf ein Element zugegriffen wird, auf das kein
+	 * Zugriff besteht. Dies sollte im korrekten Ablauf nicht passieren.
+	 * @throws InstantiationException Wird geworfen, falls versucht wird, ein Element einer abstrakten
+	 * Klasse zu erstellen. Dies sollte im korrekten Ablauf nicht passieren.
+	 * @throws InvocationTargetException Wird geworfen, falls ein Konstruktor für ein Objekt, welches
+	 * erstellt werden soll, eine Exception wirft.
+	 * @throws NoSuchMethodException Wird geworfen, falls kein Standard-Konstruktor für ein Objekt,
+	 * welches erstellt werden soll, existiert.
+	 */
 	private Object jsonToObject(Object json) throws ClassNotFoundException, IllegalAccessException,
-			InstantiationException, InvocationTargetException, NoSuchMethodException {
+				InstantiationException, InvocationTargetException, NoSuchMethodException {
 		if (json == null) {
 			return null;
 		}
@@ -277,8 +311,36 @@ public class Serialiser {
 		return newObject;
 	}
 
+	/**
+	 * Gibt ein Objekt mit dem angegebenen Hash zurück, falls es im angegebenen für Json benutzbaren
+	 * Objekt enthalten ist:<br>
+	 * Falls das angegebene Objekt null oder {@link #isSimpleType(Class) simpel} ist, wird null zurückgegeben.<br>
+	 * Falls das angegebene Objekt eine Map ist und nicht das Objekt mit dem gesuchten Hash ist, wird diese
+	 * Methode für jeden key und jeden value der Map aufgerufen und null zurückgegeben, falls kein Aufruf das
+	 * Objekt findet.<br>
+	 * Falls das angegebene Objekt ein Array oder Iterable ist und nicht das Objekt mit dem gesuchten Hash
+	 * ist, wird diese Methode für jedes Unterobjekt aufgerufen und null zurückgegeben, falls kein Aufruf das
+	 * Objekt findet.<br>
+	 * Ansonsten wird diese Methode für jedes Feld des Objektes aufgerufen und null zurückgegeben, fassl kein
+	 * Aufruf das Objekt findet.
+	 * @param json Das für Json benutzbare Objekt, welches nach dem Objekt mit dem angegebenen Hash durchsucht
+	 *             werden soll
+	 * @param searchedHash Der angegebene Hash, dessen dazugehöriges Objekt zurückgegeben werden soll
+	 * @return Das Objekt mit dem angegebenen Hash, falls es im angegebenen für Json benutzbarem Objekt enthalten
+	 * ist, ansonsten null
+	 * @throws IllegalAccessException Wird geworfen, falls auf ein Element zugegriffen wird, auf das kein
+	 * Zugriff besteht. Dies sollte im korrekten Ablauf nicht passieren.
+	 * @throws InstantiationException Wird geworfen, falls versucht wird, ein Element einer abstrakten
+	 * Klasse zu erstellen. Dies sollte im korrekten Ablauf nicht passieren.
+	 * @throws ClassNotFoundException Wird geworfen, falls eine der angegebenen Klassen eines Objektes
+	 * nicht gefunden wurde. Dies sollte im korrekten Ablauf nicht passieren.
+	 * @throws InvocationTargetException Wird geworfen, falls ein Konstruktor für ein Objekt, welches
+	 * erstellt werden soll, eine Exception wirft.
+	 * @throws NoSuchMethodException Wird geworfen, falls kein Standard-Konstruktor für ein Objekt,
+	 * welches erstellt werden soll, existiert.
+	 */
 	private Object getLinkedObject(Object json, int searchedHash) throws IllegalAccessException,
-			InstantiationException, ClassNotFoundException, InvocationTargetException, NoSuchMethodException {
+				InstantiationException, ClassNotFoundException, InvocationTargetException, NoSuchMethodException {
 		if (json == null) {
 			return null;
 		}
@@ -338,6 +400,21 @@ public class Serialiser {
 		return null;
 	}
 
+	/**
+	 * Hilfsmethode<br>
+	 * Gibt eine neue Instanz einer angegebenen Klasse zurück.<br>
+	 * Dafür wird der Standardkonstruktor der Klasse ausgeführt und die neue Instanz zurückgegeben.
+	 * @param objectClass Die angegebene Klasse, von der eine neue Instanz zurückgegeben werden soll
+	 * @return Die neue Instanz der angegebenen Klasse
+	 * @throws IllegalAccessException Wird geworfen, falls auf ein Element zugegriffen wird, auf das kein
+	 * Zugriff besteht. Dies sollte im korrekten Ablauf nicht passieren.
+	 * @throws InvocationTargetException Wird geworfen, falls der Standardkonstruktor der angegebenen
+	 * Klasse eine Exception wirft.
+	 * @throws InstantiationException Wird geworfen, falls die angegebene Klasse abstrakt ist.
+	 * Dies sollte im korrekten Ablauf nicht passieren.
+	 * @throws NoSuchMethodException Wird geworfen, falls kein Standard-Konstruktor für die angegebene
+	 * Klasse existiert.
+	 */
 	private Object getNewInstance(Class<?> objectClass) throws IllegalAccessException,
 			InvocationTargetException, InstantiationException, NoSuchMethodException {
 		Constructor<?> constructor = objectClass.getDeclaredConstructor();
