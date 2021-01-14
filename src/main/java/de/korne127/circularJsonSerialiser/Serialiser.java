@@ -1,7 +1,9 @@
 package de.korne127.circularJsonSerialiser;
 
 import java.lang.reflect.Array;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -19,6 +21,9 @@ import org.json.JSONObject;
 public class Serialiser {
 
 	private Map<Integer, Object> hashTable;
+
+	private JSONObject wholeJson;
+
 
 	/**
 	 * Konvertiert das angegebene Objekt zu einem JSON-Objekt, welches als String zurückgegeben wird<br>
@@ -158,8 +163,185 @@ public class Serialiser {
 	}
 
 	public Object deserialiseObject(String content) {
+		hashTable = new HashMap<>();
+		wholeJson = new JSONObject(content);
 
+		try {
+			return jsonToObject(wholeJson);
+		} catch (ClassNotFoundException | InstantiationException | IllegalAccessException |
+				InvocationTargetException | NoSuchMethodException e) {
+			System.err.println("Fatal Error: Object could not be serialised");
+			e.printStackTrace();
+			throw new IllegalStateException("Fatal Error: Object could not be serialised.");
+		}
+	}
+
+	private Object jsonToObject(Object json) throws ClassNotFoundException, IllegalAccessException,
+			InstantiationException, InvocationTargetException, NoSuchMethodException {
+		if (json == null) {
+			return null;
+		}
+		if (isSimpleType(json.getClass())) {
+			if (String.class == json.getClass()) {
+				String string = (String) json;
+				if (string.isEmpty()) {
+					return string;
+				}
+				if (string.charAt(0) == '@') {
+					int hash = Integer.parseInt(string.substring(1));
+					Object linkedObject = getLinkedObject(wholeJson, hash);
+					if (linkedObject == null) {
+						throw new IllegalStateException("Linked Object: " + string + " could not be found");
+					}
+					return linkedObject;
+				}
+				if (string.matches("(\\\\)+@.*")) {
+					return string.substring(1);
+				}
+				return string;
+			}
+			return json;
+		}
+		if (json instanceof JSONArray) {
+			JSONArray jsonArray = (JSONArray) json;
+			String[] classInfos = jsonArray.getString(0).split("=");
+			String className = classInfos[0];
+			int hash = Integer.parseInt(classInfos[1]);
+
+			if (hashTable.containsKey(hash)) {
+				return hashTable.get(hash);
+			}
+
+			Class<?> newClass = Class.forName(className);
+			if (newClass.isArray()) {
+				Object newArray = Array.newInstance(newClass.getComponentType(), jsonArray.length() - 1);
+				hashTable.put(hash, newArray);
+				for (int arrayCreateIterator = 1; arrayCreateIterator < jsonArray.length();
+					 arrayCreateIterator++) {
+					Array.set(newArray, arrayCreateIterator - 1,
+							jsonToObject(jsonArray.get(arrayCreateIterator)));
+				}
+				return newArray;
+			}
+			Object newObject = getNewInstance(newClass);
+			if (newObject instanceof Collection) {
+				@SuppressWarnings("unchecked")
+				Collection<Object> newCollection = (Collection<Object>) newObject;
+				hashTable.put(hash, newCollection);
+				for (Object jsonArrayPart : jsonArray) {
+					if (jsonArrayPart == jsonArray.get(0)) continue; //TODO besser
+					newCollection.add(jsonToObject(jsonArrayPart));
+				}
+				return newCollection;
+			}
+			if (newObject instanceof Map) {
+				@SuppressWarnings("unchecked")
+				Map<Object, Object> newMap = (Map<Object, Object>) newObject;
+				hashTable.put(hash, newMap);
+				for (Object jsonArrayPart : jsonArray) {
+					if (jsonArrayPart == jsonArray.get(0)) continue; //TODO besser
+					JSONObject jsonArrayChild = (JSONObject) jsonArrayPart;
+					Object childKey = jsonToObject(jsonArrayChild.get("key"));
+					Object chilValue = jsonToObject(jsonArrayChild.get("value"));
+					newMap.put(childKey, chilValue);
+				}
+				return newMap;
+			}
+		}
+		JSONObject jsonObject = (JSONObject) json;
+
+		String[] classInfos = jsonObject.getString("class").split("=");
+		String className = classInfos[0];
+		int hash = Integer.parseInt(classInfos[1]);
+
+		if (hashTable.containsKey(hash)) {
+			return hashTable.get(hash);
+		}
+
+		Class<?> newClass = Class.forName(className);
+		Object newObject = getNewInstance(newClass);
+		hashTable.put(hash, newObject);
+
+		while (newClass != null) {
+			for (Field field : newClass.getDeclaredFields()) {
+				field.setAccessible(true);
+				if (field.isAnnotationPresent(SerialiseIgnore.class)) {
+					continue;
+				}
+				Object childJson = jsonObject.get(field.getName());
+				field.set(newObject, jsonToObject(childJson));
+			}
+			newClass = newClass.getSuperclass();
+		}
+
+		return newObject;
+	}
+
+	private Object getLinkedObject(Object json, int searchedHash) throws IllegalAccessException,
+			InstantiationException, ClassNotFoundException, InvocationTargetException, NoSuchMethodException {
+		if (json == null) {
+			return null;
+		}
+		if (isSimpleType(json.getClass())) {
+			return null;
+		}
+		if (json instanceof JSONArray) {
+			JSONArray jsonArray = (JSONArray) json;
+			String[] classInfos = jsonArray.getString(0).split("=");
+
+			int hash = Integer.parseInt(classInfos[1]);
+			if (hash == searchedHash) {
+				return jsonToObject(jsonArray);
+			}
+
+			String className = classInfos[0];
+			Class<?> newClass = Class.forName(className);
+
+			if (!newClass.isArray()) {
+				Object newObject = getNewInstance(newClass);
+				if (newObject instanceof Map) {
+					for (Object jsonArrayPart : jsonArray) {
+						if (jsonArrayPart == jsonArray.get(0)) continue; //TODO besser machen
+						JSONObject mapPart = (JSONObject) jsonArrayPart;
+						Object keyPart = getLinkedObject(mapPart.get("key"), searchedHash);
+						if (keyPart != null) {
+							return keyPart;
+						}
+						Object valuePart = getLinkedObject(mapPart.get("value"), searchedHash);
+						if (valuePart != null) {
+							return valuePart;
+						}
+					}
+					return null;
+				}
+			}
+			for (Object jsonArrayPart : jsonArray) {
+				if (jsonArrayPart == jsonArray.get(0)) continue; //TODO besser machen
+				Object arrayPart = getLinkedObject(jsonArrayPart, searchedHash);
+				if (arrayPart != null) {
+					return arrayPart;
+				}
+			}
+			return null;
+		}
+		JSONObject jsonObject = (JSONObject) json;
+		int hash = Integer.parseInt(jsonObject.getString("class").split("=")[1]);
+		if (hash == searchedHash) {
+			return jsonToObject(jsonObject);
+		}
+		for (String jsonObjectPart : jsonObject.keySet()) {
+			Object objectPart = getLinkedObject(jsonObject.get(jsonObjectPart), searchedHash);
+			if (objectPart != null) {
+				return objectPart;
+			}
+		}
 		return null;
 	}
 
+	private Object getNewInstance(Class<?> objectClass) throws IllegalAccessException,
+			InvocationTargetException, InstantiationException, NoSuchMethodException {
+		Constructor<?> constructor = objectClass.getDeclaredConstructor();
+		constructor.setAccessible(true);
+		return constructor.newInstance();
+	}
 }
