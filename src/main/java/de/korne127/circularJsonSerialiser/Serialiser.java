@@ -10,10 +10,22 @@ import de.korne127.circularJsonSerialiser.annotations.SerialiseIgnore;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+/**
+ * Serialiser-Klasse<br>
+ * Diese Klasse stellt einen Serialiser bereit, der ein angegebenes Objekt in ein JSON-Objekt umwandelt und
+ * als String zurückgibt.
+ * @author Korne127
+ */
 public class Serialiser {
 
 	private Map<Integer, Object> hashTable;
 
+	/**
+	 * Konvertiert das angegebene Objekt zu einem JSON-Objekt, welches als String zurückgegeben wird<br>
+	 * Für Implementierungsdetails, siehe {@link #objectToJson(Object object)}
+	 * @param object Das Objekt, welches zu einem JSON-Objekt konvertiert werden soll
+	 * @return Das aus dem angegebenen Objekt kodierte JSON-Objekt
+	 */
 	public String serialiseObject(Object object) {
 		hashTable = new HashMap<>();
 		try {
@@ -25,6 +37,23 @@ public class Serialiser {
 		}
 	}
 
+	/**
+	 * Konvertiert rekursiv ein angegebenes Objekt zu einem für JSON benutzbares Objekt<br>
+	 * Falls das angegebene Objekt null oder {@link #isSimpleType(Class) simpel} ist, wird es zurückgegeben.<br>
+	 * Falls das angegebene Objekt bereits an einer anderen Stelle gespeichert wird, wird nur ein Verweis auf
+	 * diese Stelle gespeichert und zurückgegeben.<br>
+	 * Falls das angegebene Objekt ein Array oder eine Collection ist, wird die Methode für alle Elemente aufgerufen
+	 * und zusammen in einem JSON-Array zurückgegeben.<br>
+	 * Falls das angegebene Objekt eine Map ist, wird die Methode für alle Keys und dazugehörigen Values aufgerufen,
+	 * je ein Key und der dazugehörige value in einem JSON-Objekt gespeichert und alle JSON-Objekte in einem
+	 * JSON-Array zurückgegeben.<br>
+	 * Ansonsten werden alle Felder des Objektes (und aller Oberklassen) durchgegangen und aufgerufen und in
+	 * einem JSON-Objekt gespeichert, welches dann zurückgegeben wird.
+	 * @param object Das Objekt, welches zu einem für JSON benutzbaren Objekt umgewandelt werden soll
+	 * @return Das aus dem angegebenen Objekt kodierte für JSON benutzbare Objekt
+	 * @throws IllegalAccessException Wird geworfen, falls auf ein Element zugegriffen wird, auf das kein Zugriff
+	 * besteht. Dies sollte im korrekten Ablauf nicht passieren.
+	 */
 	private Object objectToJson(Object object) throws IllegalAccessException {
 		if (object == null) {
 			return null;
@@ -91,12 +120,27 @@ public class Serialiser {
 		return jsonObject;
 	}
 
+	/**
+	 * Hilfsmethode<br>
+	 * Prüft, ob eine angegebene Klasse die Klasse eines Wrapper-Objektes eines simplen Datentyps oder ein
+	 * String ist.
+	 * @param objectClass Die Klasse, die geprüft werden soll
+	 * @return true, falls die angegebene Klasse die Klasse eines Wrapper-Objektes eines simplen Datentyps
+	 * oder ein String ist, ansonsten false
+	 */
 	private boolean isSimpleType(Class<?> objectClass) {
 		return (objectClass == Integer.class || objectClass == Byte.class || objectClass == Short.class ||
 				objectClass == Long.class || objectClass == Float.class || objectClass == Double.class ||
 				objectClass == Character.class || objectClass == Boolean.class || objectClass == String.class);
 	}
 
+	/**
+	 * Hilfsmethode<br>
+	 * Konvertiert ein Array eines primitiven Datentyps (z.B. int) in ein Array des Wrapper-Objektes dieses
+	 * Datentyps (z.B. Integer).
+	 * @param val Das Array eines primitiven Datentyps, welches konvertiert werden soll
+	 * @return Das konvertierte Array eines Wrapper-Objektes
+	 */
 	private Object[] convertPrimitiveToArray(Object val) {
 		int length = Array.getLength(val);
 		Object[] outputArray = new Object[length];
