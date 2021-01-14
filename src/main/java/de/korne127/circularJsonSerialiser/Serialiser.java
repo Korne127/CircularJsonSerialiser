@@ -77,13 +77,16 @@ public class Serialiser {
 		}
 		JSONObject jsonObject = new JSONObject();
 		jsonObject.put("class", objectClass.getName() + "=" + objectHash);
-		for (Field objectField : objectClass.getDeclaredFields()) {
-			objectField.setAccessible(true);
-			if (objectField.isAnnotationPresent(SerialiseIgnore.class)) {
-				continue;
+		while (objectClass != null) {
+			for (Field objectField : objectClass.getDeclaredFields()) {
+				objectField.setAccessible(true);
+				if (objectField.isAnnotationPresent(SerialiseIgnore.class)) {
+					continue;
+				}
+				Object child = objectField.get(object);
+				jsonObject.put(objectField.getName(), objectToJson(child));
 			}
-			Object child = objectField.get(object);
-			jsonObject.put(objectField.getName(), objectToJson(child));
+			objectClass = objectClass.getSuperclass();
 		}
 		return jsonObject;
 	}
