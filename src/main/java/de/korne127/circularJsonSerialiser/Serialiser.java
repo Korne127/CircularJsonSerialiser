@@ -60,6 +60,13 @@ public class Serialiser {
 		}
 		Class<?> objectClass = object.getClass();
 		if (isSimpleType(objectClass)) {
+			if (objectClass == String.class) {
+				String string = (String) object;
+				if (string.matches("(\\\\)*@.*")) {
+					string = "\\" + string;
+					return string;
+				}
+			}
 			return object;
 		}
 
