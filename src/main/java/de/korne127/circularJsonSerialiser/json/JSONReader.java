@@ -5,6 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import de.korne127.circularJsonSerialiser.exceptions.JsonParseException;
+
 /**
  * JSONReader-Klasse:<br>
  * Diese Klasse verfügt über statische Methoden um Inhalte eines JSON-Strings einzulesen
@@ -39,10 +41,12 @@ class JSONReader {
 	 * @param iteratorStart Die Position im String, an der das kodierte JSON-Objekt beginnt
 	 * @return Ein JSONResult, welches aus dem JSON-Objekt, welches aus der Kodierung hergestellt
 	 * wurde sowie der Position im String, an der die Kodierung des JSON-Objektes endet, besteht
+	 * @throws JsonParseException Wird geworfen, falls das JSON-Objekt aus dem JSON-String nicht
+	 * geparst werden konnte.
 	 */
-	static JSONResult readObject(String content, int iteratorStart) {
+	static JSONResult readObject(String content, int iteratorStart) throws JsonParseException {
 		if (content.charAt(iteratorStart) != '{') {
-			//TODO Hier eine Exception werfen
+			throw new JsonParseException("Object in JSON-String could not be parsed.");
 		}
 
 		ObjectReadingState state = ObjectReadingState.BEFORE_KEY;
@@ -57,7 +61,7 @@ class JSONReader {
 					switch (character) {
 						case '\"': state = ObjectReadingState.KEY; break;
 						case ' ': break;
-						default: break; //TODO Hier eine Exception werfen
+						default: throw new JsonParseException("Object in JSON-String could not be parsed.");
 					}
 					break;
 				case KEY:
@@ -71,7 +75,7 @@ class JSONReader {
 					if (character == ':') {
 						state = ObjectReadingState.VALUE;
 					} else if (character != ' ') {
-						//TODO Hier eine Exception werfen
+						throw new JsonParseException("Object in JSON-String could not be parsed.");
 					}
 					break;
 				case VALUE:
@@ -99,13 +103,12 @@ class JSONReader {
 						case '}':
 							map.put(key.toString(), value);
 							return new JSONResult(new JSONObject(map), characterIterator + 1);
-						default: break; //TODO Hier eine Exception werfen
+						default: throw new JsonParseException("Object in JSON-String could not be parsed.");
 					}
 					break;
 			}
 		}
-		//TODO Hier eine Exception werfen
-		return null;
+		throw new JsonParseException("Object in JSON-String could not be parsed.");
 	}
 
 	/**
@@ -115,10 +118,12 @@ class JSONReader {
 	 * @param iteratorStart Die Position im String, an der das kodierte JSON-Array beginnt
 	 * @return Ein JSONResult, welches aus dem JSON-Array, welches aus der Kodierung hergestellt
 	 * wurde sowie der Position im String, an der die Kodierung des JSON-Arrays endet, besteht
+	 * @throws JsonParseException Wird geworfen, falls das JSON-Array aus dem JSON-String nicht
+	 * geparst werden konnte.
 	 */
-	static JSONResult readArray(String content, int iteratorStart) {
+	static JSONResult readArray(String content, int iteratorStart) throws JsonParseException {
 		if (content.charAt(iteratorStart) != '[') {
-			//TODO Hier eine Exception werfen
+			throw new JsonParseException("Array in JSON-String could not be parsed.");
 		}
 
 		ArrayReadingState state = ArrayReadingState.VALUE;
@@ -152,13 +157,12 @@ class JSONReader {
 						case ']':
 							list.add(value);
 							return new JSONResult(new JSONArray(list), characterIterator + 1);
-						default: break; //TODO Hier eine Exception werfen
+						default: throw new JsonParseException("Array in JSON-String could not be parsed.");
 					}
 					break;
 			}
 		}
-		//TODO Hier eine Exception werfen
-		return null;
+		throw new JsonParseException("Array in JSON-String could not be parsed.");
 	}
 
 	/**
@@ -168,10 +172,12 @@ class JSONReader {
 	 * @param iteratorStart Die Position im String, an der der kodierte String beginnt
 	 * @return Ein JSONResult, welches aus dem String, welcher aus der Kodierung hergestellt
 	 * wurde sowie der Position im String, an der die Kodierung des Strings endet, besteht
+	 * @throws JsonParseException Wird geworfen, falls der String aus dem JSON-String nicht
+	 * geparst werden konnte.
 	 */
-	private static JSONResult readString(String content, int iteratorStart) {
+	private static JSONResult readString(String content, int iteratorStart) throws JsonParseException {
 		if (content.charAt(iteratorStart) != '\"') {
-			//TODO Hier eine Exception werfen
+			throw new JsonParseException("String in JSON-String could not be parsed.");
 		}
 
 		StringBuilder builder = new StringBuilder();
@@ -189,7 +195,7 @@ class JSONReader {
 					case '\"': builder.append("\""); break;
 					case '\'': builder.append("'"); break;
 					case '\\': builder.append("\\"); break;
-					default: break; //TODO Hier eine Exception werfen
+					default: throw new JsonParseException("String in JSON-String could not be parsed.");
 				}
 				lastCharacter = 0;
 			} else {
@@ -201,8 +207,7 @@ class JSONReader {
 				lastCharacter = character;
 			}
 		}
-		//TODO Hier eine Exception werfen
-		return  null;
+		throw new JsonParseException("String in JSON-String could not be parsed.");
 	}
 
 	/**
@@ -212,8 +217,10 @@ class JSONReader {
 	 * @param iteratorStart Die Position im String, an der der primitive Datentyp beginnt
 	 * @return Ein JSONResult, welches aus dem primitiven Datentypen, welches aus der Kodierung
 	 * hergestellt wurde sowie der Position im String, an der die Kodierung des Typen endet, besteht
+	 * @throws JsonParseException Wird geworfen, falls die Nummer aus dem JSON-String nicht geparst
+	 * werden konnte.
 	 */
-	private static JSONResult readBasicType(String content, int iteratorStart) {
+	private static JSONResult readBasicType(String content, int iteratorStart) throws JsonParseException {
 		Object value;
 		int iteratorSkip;
 
@@ -243,9 +250,8 @@ class JSONReader {
 				}
 			}
 			String numberString = builder.toString().trim();
-			value = 0;
 			if (numberString.equals("")) {
-				//TODO Hier eine Exception werfen
+				throw new JsonParseException("Number in JSON-String could not be parsed.");
 			}
 
 			char lastLetter = numberString.charAt(numberString.length() - 1);
@@ -254,28 +260,28 @@ class JSONReader {
 					try {
 						value = Byte.parseByte(numberString.substring(0, numberString.length() - 1));
 					} catch (NumberFormatException e) {
-						//TODO Hier eine Exception werfen
+						throw new JsonParseException("Number in JSON-String could not be parsed.", e);
 					}
 					break;
 				case 'S':
 					try {
 						value = Short.parseShort(numberString.substring(0, numberString.length() - 1));
 					} catch (NumberFormatException e) {
-						//TODO Hier eine Exception werfen
+						throw new JsonParseException("Number in JSON-String could not be parsed.", e);
 					}
 					break;
 				case 'L':
 					try {
 						value = Long.parseLong(numberString.substring(0, numberString.length() - 1));
 					} catch (NumberFormatException e) {
-						//TODO Hier eine Exception werfen
+						throw new JsonParseException("Number in JSON-String could not be parsed.", e);
 					}
 					break;
 				case 'F':
 					try {
 						value = Float.parseFloat(numberString.substring(0, numberString.length() - 1));
 					} catch (NumberFormatException e) {
-						//TODO Hier eine Exception werfen
+						throw new JsonParseException("Number in JSON-String could not be parsed.", e);
 					}
 					break;
 				default:
@@ -283,18 +289,17 @@ class JSONReader {
 						try {
 							value = Double.parseDouble(numberString);
 						} catch (NumberFormatException e) {
-							//TODO Hier eine Exception werfen
+							throw new JsonParseException("Number in JSON-String could not be parsed.", e);
 						}
 					} else {
 						try {
 							value = Integer.parseInt(numberString);
 						} catch (NumberFormatException e) {
-							//TODO Hier eine Exception werfen
+							throw new JsonParseException("Number in JSON-String could not be parsed.", e);
 						}
 					}
 					break;
 			}
-
 		}
 		return new JSONResult(value, iteratorStart + iteratorSkip);
 	}

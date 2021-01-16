@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
+import de.korne127.circularJsonSerialiser.exceptions.DeserialiseException;
+
 /**
  * JSONArray-Klasse:<br>
  * Diese Klasse speichert eine Liste und bietet Methoden, die Liste in einen JSON-String
@@ -44,9 +46,14 @@ public class JSONArray implements JSONElement {
 	 * @param index Die Position in der Liste, an der sich das Objekt befindet, dass zurückgegeben
 	 *              werden soll
 	 * @return Das Objekt, das an der angegebene Position in der Liste ist
+	 * @throws DeserialiseException Wird geworfen, falls das gesuchte Objekt nicht gefunden wird.
 	 */
-	public Object get(int index) {
-		return list.get(index); //TODO eventuell eigene Exception wenn nicht existieren kann
+	public Object get(int index) throws DeserialiseException {
+		try {
+			return list.get(index);
+		} catch (IndexOutOfBoundsException e) {
+			throw new DeserialiseException("JSON-Array child not found.", e);
+		}
 	}
 
 	/**
@@ -54,14 +61,15 @@ public class JSONArray implements JSONElement {
 	 * @param index Die Position in der Liste, an der sich der String befindet, der zurückgegeben
 	 *              werden soll
 	 * @return Der String, das an der angegebene Position in der Liste ist
+	 * @throws DeserialiseException Wird geworfen, falls das gesuchte Objekt nicht gefunden wird oder
+	 * kein String ist.
 	 */
-	public String getString(int index) {
+	public String getString(int index) throws DeserialiseException {
 		Object object = get(index);
 		if (object instanceof String) {
 			return (String) object;
 		}
-		//TODO hier eine Exception
-		return null;
+		throw new DeserialiseException("Type Mismatch: JSON-Array child is not a string.");
 	}
 
 	/**

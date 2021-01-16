@@ -23,5 +23,5 @@ import java.lang.annotation.Target;
 @Inherited
 @Documented
 public @interface SerialiseFile {
-	String fileName() default "Standard";
+	String value() default "Standard";
 }

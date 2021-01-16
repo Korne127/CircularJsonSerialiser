@@ -9,6 +9,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import de.korne127.circularJsonSerialiser.annotations.SerialiseIgnore;
+import de.korne127.circularJsonSerialiser.exceptions.DeserialiseException;
+import de.korne127.circularJsonSerialiser.exceptions.JsonParseException;
+import de.korne127.circularJsonSerialiser.exceptions.SerialiseException;
 import de.korne127.circularJsonSerialiser.json.JSONArray;
 import de.korne127.circularJsonSerialiser.json.JSONObject;
 
@@ -30,16 +33,13 @@ public class Serialiser {
 	 * Für Implementierungsdetails, siehe {@link #objectToJson(Object object)}.
 	 * @param object Das Objekt, welches zu einem JSON-Objekt konvertiert werden soll
 	 * @return Das aus dem angegebenen Objekt kodierte JSON-Objekt
+	 * @throws SerialiseException Wird geworfen, falls ein Fehler beim Serialisieren des Objektes
+	 * aufgetreten ist.
 	 */
-	public String serialiseObject(Object object) {
+	public String serialiseObject(Object object) throws SerialiseException {
 		hashTable = new HashMap<>();
-		try {
-			return objectToJson(object).toString();
-		} catch (IllegalAccessException e) {
-			System.err.println("Fatal Error: Object could not be serialised.");
-			e.printStackTrace();
-			throw new IllegalStateException("Fatal Error: Object could not be serialised.");
-		}
+
+		return objectToJson(object).toString();
 	}
 
 	/**
@@ -56,10 +56,9 @@ public class Serialiser {
 	 * einem JSON-Objekt gespeichert, welches dann zurückgegeben wird.
 	 * @param object Das Objekt, welches zu einem für JSON benutzbaren Objekt umgewandelt werden soll
 	 * @return Das aus dem angegebenen Objekt kodierte für JSON benutzbare Objekt
-	 * @throws IllegalAccessException Wird geworfen, falls auf ein Element zugegriffen wird, auf das kein Zugriff
-	 * besteht. Dies sollte im korrekten Ablauf nicht passieren.
+	 * @throws SerialiseException Wird geworfen, falls ein Fehler beim Serialisieren des Objektes auftritt.
 	 */
-	private Object objectToJson(Object object) throws IllegalAccessException {
+	private Object objectToJson(Object object) throws SerialiseException {
 		if (object == null) {
 			return null;
 		}
@@ -124,7 +123,14 @@ public class Serialiser {
 				if (objectField.isAnnotationPresent(SerialiseIgnore.class)) {
 					continue;
 				}
-				Object child = objectField.get(object);
+				Object child;
+				try {
+					child = objectField.get(object);
+				} catch (IllegalAccessException e) {
+					throw new SerialiseException("Fatal error: The field value of the field " +
+							objectField.getName() +" in the class " + objectField.getDeclaringClass() +
+							" could not be retrieved.", e);
+				}
 				jsonObject.put(objectField.getName(), objectToJson(child));
 			}
 			objectClass = objectClass.getSuperclass();
@@ -167,19 +173,16 @@ public class Serialiser {
 	 * Für Implementierungsdetails, siehe {@link #jsonToObject(Object object)}.
 	 * @param content Der JSON-String, aus dem ein Objekt berechnet werden soll
 	 * @return Das aus dem angegebenen JSON-String berechnete Objekt
+	 * @throws JsonParseException Wird geworfen, falls der JSON-String nicht geparst werden
+	 * konnte.
+	 * @throws DeserialiseException Wird geworfen, falls ein Fehler beim Deserialisieren
+	 * des Objektes aufgetreten ist.
 	 */
-	public Object deserialiseObject(String content) {
+	public Object deserialiseObject(String content) throws JsonParseException, DeserialiseException {
 		hashTable = new HashMap<>();
 		wholeJson = new JSONObject(content);
 
-		try {
-			return jsonToObject(wholeJson);
-		} catch (ClassNotFoundException | InstantiationException | IllegalAccessException |
-				InvocationTargetException | NoSuchMethodException e) {
-			System.err.println("Fatal Error: Object could not be serialised");
-			e.printStackTrace();
-			throw new IllegalStateException("Fatal Error: Object could not be serialised.");
-		}
+		return jsonToObject(wholeJson);
 	}
 
 	/**
@@ -198,19 +201,10 @@ public class Serialiser {
 	 * resultierenden Objekte in ein passendes erstelltes Objekt gesetzt und dies zurückgegeben.
 	 * @param json Das für JSON benutzbare Objekt, welches in ein Objekt umgewandelt werden soll
 	 * @return Das aus dem angegebenen für JSON benutzbare Objekt berechnete Objekt
-	 * @throws ClassNotFoundException Wird geworfen, falls eine der angegebenen Klassen eines Objektes
-	 * nicht gefunden wurde. Dies sollte im korrekten Ablauf nicht passieren.
-	 * @throws IllegalAccessException Wird geworfen, falls auf ein Element zugegriffen wird, auf das kein
-	 * Zugriff besteht. Dies sollte im korrekten Ablauf nicht passieren.
-	 * @throws InstantiationException Wird geworfen, falls versucht wird, ein Element einer abstrakten
-	 * Klasse zu erstellen. Dies sollte im korrekten Ablauf nicht passieren.
-	 * @throws InvocationTargetException Wird geworfen, falls ein Konstruktor für ein Objekt, welches
-	 * erstellt werden soll, eine Exception wirft.
-	 * @throws NoSuchMethodException Wird geworfen, falls kein Standard-Konstruktor für ein Objekt,
-	 * welches erstellt werden soll, existiert.
+	 * @throws DeserialiseException Wird geworfen, falls ein Fehler beim Deserialisieren des Objektes
+	 * auftritt.
 	 */
-	private Object jsonToObject(Object json) throws ClassNotFoundException,
-			IllegalAccessException, InstantiationException, InvocationTargetException, NoSuchMethodException {
+	private Object jsonToObject(Object json) throws DeserialiseException {
 		if (json == null) {
 			return null;
 		}
@@ -224,7 +218,8 @@ public class Serialiser {
 					int hash = Integer.parseInt(string.substring(1));
 					Object linkedObject = getLinkedObject(wholeJson, hash);
 					if (linkedObject == null) {
-						throw new IllegalStateException("Linked Object: " + string + " could not be found");
+						throw new DeserialiseException("The definition of the linked object " +
+								string + " could not be found.");
 					}
 					return linkedObject;
 				}
@@ -245,7 +240,12 @@ public class Serialiser {
 				return hashTable.get(hash);
 			}
 
-			Class<?> newClass = Class.forName(className);
+			Class<?> newClass;
+			try {
+				newClass = Class.forName(className);
+			} catch (ClassNotFoundException e) {
+				throw new DeserialiseException("The specified class " + className + " could not be found.", e);
+			}
 			if (newClass.isArray()) {
 				Object newArray = Array.newInstance(newClass.getComponentType(), jsonArray.length() - 1);
 				hashTable.put(hash, newArray);
@@ -289,7 +289,12 @@ public class Serialiser {
 			return hashTable.get(hash);
 		}
 
-		Class<?> newClass = Class.forName(className);
+		Class<?> newClass;
+		try {
+			newClass = Class.forName(className);
+		} catch (ClassNotFoundException e) {
+			throw new DeserialiseException("The specified class " + className + " could not be found.", e);
+		}
 		Object newObject = getNewInstance(newClass);
 		hashTable.put(hash, newObject);
 
@@ -300,7 +305,17 @@ public class Serialiser {
 					continue;
 				}
 				Object childJson = jsonObject.get(field.getName());
-				field.set(newObject, jsonToObject(childJson));
+				try {
+					field.set(newObject, jsonToObject(childJson));
+				} catch (IllegalArgumentException e) {
+					throw new DeserialiseException("Type Mismatch: " +
+							"Field type of field " + field.getName() + " in class" + field.getDeclaringClass() +
+							" (" + field.getType() + ") is not equal to JSON-Element child type.", e);
+				} catch (IllegalAccessException e) {
+					throw new DeserialiseException("Illegal Access: " +
+							"Field " + field.getName() + " in class " + field.getDeclaringClass() +
+							" could not be overwritten.", e);
+				}
 			}
 			newClass = newClass.getSuperclass();
 		}
@@ -325,19 +340,10 @@ public class Serialiser {
 	 * @param searchedHash Der angegebene Hash, dessen dazugehöriges Objekt zurückgegeben werden soll
 	 * @return Das Objekt mit dem angegebenen Hash, falls es im angegebenen für Json benutzbarem Objekt enthalten
 	 * ist, ansonsten null
-	 * @throws IllegalAccessException Wird geworfen, falls auf ein Element zugegriffen wird, auf das kein
-	 * Zugriff besteht. Dies sollte im korrekten Ablauf nicht passieren.
-	 * @throws InstantiationException Wird geworfen, falls versucht wird, ein Element einer abstrakten
-	 * Klasse zu erstellen. Dies sollte im korrekten Ablauf nicht passieren.
-	 * @throws ClassNotFoundException Wird geworfen, falls eine der angegebenen Klassen eines Objektes
-	 * nicht gefunden wurde. Dies sollte im korrekten Ablauf nicht passieren.
-	 * @throws InvocationTargetException Wird geworfen, falls ein Konstruktor für ein Objekt, welches
-	 * erstellt werden soll, eine Exception wirft.
-	 * @throws NoSuchMethodException Wird geworfen, falls kein Standard-Konstruktor für ein Objekt,
-	 * welches erstellt werden soll, existiert.
+	 * @throws DeserialiseException Wird geworfen, falls ein Fehler aufgetreten ist, während das verlinkte
+	 * Objekt gesucht wurde.
 	 */
-	private Object getLinkedObject(Object json, int searchedHash) throws IllegalAccessException,
-				InstantiationException, ClassNotFoundException, InvocationTargetException, NoSuchMethodException {
+	private Object getLinkedObject(Object json, int searchedHash) throws DeserialiseException {
 		if (json == null) {
 			return null;
 		}
@@ -354,7 +360,12 @@ public class Serialiser {
 			}
 
 			String className = classInfos[0];
-			Class<?> newClass = Class.forName(className);
+			Class<?> newClass;
+			try {
+				newClass = Class.forName(className);
+			} catch (ClassNotFoundException e) {
+				throw new DeserialiseException("The specified class " + className + " could not be found.", e);
+			}
 
 			if (!newClass.isArray()) {
 				Object newObject = getNewInstance(newClass);
@@ -401,19 +412,28 @@ public class Serialiser {
 	 * Dafür wird der Standardkonstruktor der Klasse ausgeführt und die neue Instanz zurückgegeben.
 	 * @param objectClass Die angegebene Klasse, von der eine neue Instanz zurückgegeben werden soll
 	 * @return Die neue Instanz der angegebenen Klasse
-	 * @throws IllegalAccessException Wird geworfen, falls auf ein Element zugegriffen wird, auf das kein
-	 * Zugriff besteht. Dies sollte im korrekten Ablauf nicht passieren.
-	 * @throws InvocationTargetException Wird geworfen, falls der Standardkonstruktor der angegebenen
-	 * Klasse eine Exception wirft.
-	 * @throws InstantiationException Wird geworfen, falls die angegebene Klasse abstrakt ist.
-	 * Dies sollte im korrekten Ablauf nicht passieren.
-	 * @throws NoSuchMethodException Wird geworfen, falls kein Standard-Konstruktor für die angegebene
-	 * Klasse existiert.
+	 * @throws DeserialiseException Wird geworfen, falls die neue Instanz der Klasse nicht instanziiert
+	 * werden konnte.
 	 */
-	private Object getNewInstance(Class<?> objectClass) throws IllegalAccessException,
-			InvocationTargetException, InstantiationException, NoSuchMethodException {
-		Constructor<?> constructor = objectClass.getDeclaredConstructor();
+	private Object getNewInstance(Class<?> objectClass) throws DeserialiseException {
+		Constructor<?> constructor;
+		try {
+			constructor = objectClass.getDeclaredConstructor();
+		} catch (NoSuchMethodException e) {
+			throw new DeserialiseException("No default constructor found for class " +
+					objectClass.getName() + ".", e);
+		}
 		constructor.setAccessible(true);
-		return constructor.newInstance();
+		try {
+			return constructor.newInstance();
+		} catch (InstantiationException e) {
+			throw new DeserialiseException("Class " + objectClass.getName() + " could not be instantiated.", e);
+		} catch (IllegalAccessException e) {
+			throw new DeserialiseException("Illegal access: Class " +
+					objectClass.getName() + " could not be instantiated.", e);
+		} catch (InvocationTargetException e) {
+			throw new DeserialiseException("The default constructor of class " +
+					objectClass.getName() + " threw an exception.", e);
+		}
 	}
 }

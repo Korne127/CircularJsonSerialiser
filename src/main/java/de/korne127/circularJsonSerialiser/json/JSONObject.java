@@ -3,6 +3,9 @@ package de.korne127.circularJsonSerialiser.json;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import de.korne127.circularJsonSerialiser.exceptions.DeserialiseException;
+import de.korne127.circularJsonSerialiser.exceptions.JsonParseException;
+
 /**
  * JSONObject-Klasse:<br>
  * Diese Klasse speichert eine Map und bietet Methoden, die Map in einen JSON-String
@@ -35,8 +38,10 @@ public class JSONObject implements JSONElement {
 	 * Er benutzt den {@link JSONReader} um einen JSON-String in ein JSON-Objekt umzuwandeln
 	 * und setzt die Map auf die Map dieses Objektes.
 	 * @param content Der angegebene JSON-String
+	 * @throws JsonParseException Wird geworfen, falls das JSON-Objekt aus dem JSON-String nicht
+	 * geparst werden konnte.
 	 */
-	public JSONObject(String content) {
+	public JSONObject(String content) throws JsonParseException {
 		content = content.replaceAll("[\\n\\t]", "");
 		map = ((JSONObject) JSONReader.readObject(content, 0).getValue()).map;
 	}
@@ -54,27 +59,29 @@ public class JSONObject implements JSONElement {
 	 * Gibt das zu einem key dazugehörige Objekt aus der Map zurück, falls es existiert.
 	 * @param key Der key, dessen dazugehöriges Objekt zurückgegeben werden soll
 	 * @return Das Objekt, dass zu dem angegebenen key dazugehörig ist
+	 * @throws DeserialiseException Wird geworfen, falls kein Objekt zu dem key gespeichert
+	 * ist.
 	 */
-	public Object get(String key) {
+	public Object get(String key) throws DeserialiseException {
 		if (map.containsKey(key)) {
 			return map.get(key);
 		}
-		//TODO hier eine Exception
-		return null;
+		throw new DeserialiseException("JSON-Object child not found.");
 	}
 
 	/**
 	 * Gibt den zu einem key dazugehörigen String zurück, falls der key existiert.
 	 * @param key Der key, dessen dazugehöriger String zurückgegeben werden soll
 	 * @return Der String, der zu dem angegebenen key dazugehörig ist
+	 * @throws DeserialiseException Wird geworfen, falls kein String zu dem key
+	 * gespeichert ist.
 	 */
-	public String getString(String key) {
+	public String getString(String key) throws DeserialiseException {
 		Object object = get(key);
 		if (object instanceof String) {
 			return (String) object;
 		}
-		//TODO hier eine Exception
-		return null;
+		throw new DeserialiseException("Type Mismatch: JSON-Object child is not a string.");
 	}
 
 	/**
