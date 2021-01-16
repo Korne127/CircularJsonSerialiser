@@ -1,5 +1,7 @@
 package de.korne127.circularJsonSerialiser.json;
 
+import de.korne127.circularJsonSerialiser.Serialiser;
+
 interface JSONElement {
 
 	String toString(int indentFactor);
@@ -41,7 +43,7 @@ interface JSONElement {
 		if (object instanceof Character) {
 			return "'" + object + "'";
 		}
-		if (object instanceof Number || object instanceof Boolean) {
+		if (Serialiser.isSimpleType(object.getClass()) || object instanceof Boolean) {
 			return object.toString();
 		}
 		return "\"" + object + "\"";

@@ -1,7 +1,6 @@
 package de.korne127.circularJsonSerialiser.json;
 
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -203,23 +202,10 @@ class JSONReader {
 			String numberString = builder.toString().trim();
 			value = 0;
 
-			if (numberString.contains(".") || numberString.contains("e") || numberString.contains("E")) {
-				try {
-					value = new BigDecimal(numberString);
-				} catch (NumberFormatException e) {
-					//TODO Hier eine Exception werfen
-				}
-			} else {
-				try {
-					BigInteger bigInteger = new BigInteger(numberString);
-					if (bigInteger.bitLength() <= 31) {
-						value = bigInteger.intValue();
-					} else {
-						value = (bigInteger.bitLength() <= 63 ? bigInteger.longValue() : bigInteger);
-					}
-				} catch (NumberFormatException e) {
-					//TODO Hier eine Exception werfen
-				}
+			try {
+				value = new BigDecimal(numberString);
+			} catch (NumberFormatException e) {
+				//TODO Hier eine Exception werfen
 			}
 
 		}

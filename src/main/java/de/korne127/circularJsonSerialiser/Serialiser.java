@@ -4,6 +4,8 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -141,7 +143,7 @@ public class Serialiser {
 	 * @return true, falls die angegebene Klasse die Klasse eines Wrapper-Objektes eines simplen Datentyps
 	 * oder ein String ist, ansonsten false
 	 */
-	private boolean isSimpleType(Class<?> objectClass) {
+	public static boolean isSimpleType(Class<?> objectClass) {
 		return (objectClass == Integer.class || objectClass == Byte.class || objectClass == Short.class ||
 				objectClass == Long.class || objectClass == Float.class || objectClass == Double.class ||
 				objectClass == Character.class || objectClass == Boolean.class || objectClass == String.class);
@@ -165,7 +167,7 @@ public class Serialiser {
 
 	/**
 	 * Berechnet aus dem angegebenen JSON-String ein Objekt, welches zurückgegeben wird.<br>
-	 * Für Implementierungsdetails, siehe {@link #jsonToObject(Object object)}.
+	 * Für Implementierungsdetails, siehe {@link #jsonToObject(Object object, Class class)}.
 	 * @param content Der JSON-String, aus dem ein Objekt berechnet werden soll
 	 * @return Das aus dem angegebenen JSON-String berechnete Objekt
 	 */
@@ -174,7 +176,7 @@ public class Serialiser {
 		wholeJson = new JSONObject(content);
 
 		try {
-			return jsonToObject(wholeJson);
+			return jsonToObject(wholeJson, null);
 		} catch (ClassNotFoundException | InstantiationException | IllegalAccessException |
 				InvocationTargetException | NoSuchMethodException e) {
 			System.err.println("Fatal Error: Object could not be serialised");
@@ -187,6 +189,9 @@ public class Serialiser {
 	 * Konvertiert rekursiv ein angegebenes für JSON benutzbares Objekt zu einem Objekt:<br>
 	 * Falls das angegebene Objekt null oder {@link #isSimpleType(Class) simpel} und kein Verweis ist,
 	 * wird es zurückgegeben.<br>
+	 * Falls das Objekt ein {@link BigDecimal} ist, wird es in die angegebene Klasse konvertiert und
+	 * zurückgegeben. Falls null als Klasse angegeben wurde, wird die kleinstmögliche Ganzzahl-Klasse
+	 * bei einer Ganzzahl und Double bei einer Fließkommazahl genommen.<br>
 	 * Falls das angegebene Objekt ein Verweis ist, wird das Objekt, auf das verwiesen wird berechnet
 	 * und zurückgegeben.<br>
 	 * Falls das angegebene Objekt ein kodiertes Array oder eine kodierte Collection ist, wird diese
@@ -198,6 +203,8 @@ public class Serialiser {
 	 * Ansonsten wird für jeden kodierten Feldinhalt dieses Objektes diese Methode aufgerufen und die
 	 * resultierenden Objekte in ein passendes erstelltes Objekt gesetzt und dies zurückgegeben.
 	 * @param json Das für JSON benutzbare Objekt, welches in ein Objekt umgewandelt werden soll
+	 * @param numberType Null oder die Klasse, in die das Objekt konvertiert werden soll, falls es
+	 *                   eine Zahl ist
 	 * @return Das aus dem angegebenen für JSON benutzbare Objekt berechnete Objekt
 	 * @throws ClassNotFoundException Wird geworfen, falls eine der angegebenen Klassen eines Objektes
 	 * nicht gefunden wurde. Dies sollte im korrekten Ablauf nicht passieren.
@@ -210,8 +217,8 @@ public class Serialiser {
 	 * @throws NoSuchMethodException Wird geworfen, falls kein Standard-Konstruktor für ein Objekt,
 	 * welches erstellt werden soll, existiert.
 	 */
-	private Object jsonToObject(Object json) throws ClassNotFoundException, IllegalAccessException,
-				InstantiationException, InvocationTargetException, NoSuchMethodException {
+	private Object jsonToObject(Object json, Class<?> numberType) throws ClassNotFoundException,
+			IllegalAccessException, InstantiationException, InvocationTargetException, NoSuchMethodException {
 		if (json == null) {
 			return null;
 		}
@@ -236,6 +243,9 @@ public class Serialiser {
 			}
 			return json;
 		}
+		if (json.getClass() == BigDecimal.class) {
+			return getCorrectNumberType((BigDecimal) json, numberType);
+		}
 		if (json instanceof JSONArray) {
 			JSONArray jsonArray = (JSONArray) json;
 			String[] classInfos = jsonArray.getString(0).split("=");
@@ -253,7 +263,7 @@ public class Serialiser {
 				for (int arrayCreateIterator = 1; arrayCreateIterator < jsonArray.length();
 					 arrayCreateIterator++) {
 					Array.set(newArray, arrayCreateIterator - 1,
-							jsonToObject(jsonArray.get(arrayCreateIterator)));
+							jsonToObject(jsonArray.get(arrayCreateIterator), newClass.getComponentType()));
 				}
 				return newArray;
 			}
@@ -264,7 +274,7 @@ public class Serialiser {
 				hashTable.put(hash, newCollection);
 				for (Object jsonArrayPart : jsonArray) {
 					if (jsonArrayPart == jsonArray.get(0)) continue; //TODO besser
-					newCollection.add(jsonToObject(jsonArrayPart));
+					newCollection.add(jsonToObject(jsonArrayPart, null));
 				}
 				return newCollection;
 			}
@@ -275,8 +285,8 @@ public class Serialiser {
 				for (Object jsonArrayPart : jsonArray) {
 					if (jsonArrayPart == jsonArray.get(0)) continue; //TODO besser
 					JSONObject jsonArrayChild = (JSONObject) jsonArrayPart;
-					Object childKey = jsonToObject(jsonArrayChild.get("key"));
-					Object chilValue = jsonToObject(jsonArrayChild.get("value"));
+					Object childKey = jsonToObject(jsonArrayChild.get("key"), null);
+					Object chilValue = jsonToObject(jsonArrayChild.get("value"), null);
 					newMap.put(childKey, chilValue);
 				}
 				return newMap;
@@ -303,7 +313,7 @@ public class Serialiser {
 					continue;
 				}
 				Object childJson = jsonObject.get(field.getName());
-				field.set(newObject, jsonToObject(childJson));
+				field.set(newObject, jsonToObject(childJson, field.getType()));
 			}
 			newClass = newClass.getSuperclass();
 		}
@@ -344,7 +354,7 @@ public class Serialiser {
 		if (json == null) {
 			return null;
 		}
-		if (isSimpleType(json.getClass())) {
+		if (isSimpleType(json.getClass()) || json.getClass() == BigDecimal.class) {
 			return null;
 		}
 		if (json instanceof JSONArray) {
@@ -353,7 +363,7 @@ public class Serialiser {
 
 			int hash = Integer.parseInt(classInfos[1]);
 			if (hash == searchedHash) {
-				return jsonToObject(jsonArray);
+				return jsonToObject(jsonArray, null);
 			}
 
 			String className = classInfos[0];
@@ -389,7 +399,7 @@ public class Serialiser {
 		JSONObject jsonObject = (JSONObject) json;
 		int hash = Integer.parseInt(jsonObject.getString("class").split("=")[1]);
 		if (hash == searchedHash) {
-			return jsonToObject(jsonObject);
+			return jsonToObject(jsonObject, null);
 		}
 		for (String jsonObjectPart : jsonObject.keySet()) {
 			Object objectPart = getLinkedObject(jsonObject.get(jsonObjectPart), searchedHash);
@@ -420,5 +430,46 @@ public class Serialiser {
 		Constructor<?> constructor = objectClass.getDeclaredConstructor();
 		constructor.setAccessible(true);
 		return constructor.newInstance();
+	}
+
+	private Number getCorrectNumberType(BigDecimal jsonValue, Class<?> assignedType) {
+		if (assignedType == null) {
+			//Keine bestimmte Zahlenklasse gefordert, z.B. bei Zahlen in einer Liste
+			if (jsonValue.stripTrailingZeros().scale() <= 0) {
+				BigInteger integer = jsonValue.toBigIntegerExact();
+				if (integer.bitLength() <= 7) {
+					return integer.byteValueExact();
+				}
+				if (integer.bitLength() <= 15) {
+					return integer.shortValueExact();
+				}
+				if (integer.bitLength() <= 31) {
+					return integer.intValueExact();
+				}
+				return integer.longValueExact();
+			} else {
+				return jsonValue.doubleValue(); //TODO Entscheidungsmöglichkeit
+			}
+		}
+		if (assignedType == int.class || assignedType == Integer.class) {
+			return jsonValue.intValueExact();
+		}
+		if (assignedType == long.class || assignedType == Long.class) {
+			return jsonValue.longValueExact();
+		}
+		if (assignedType == float.class || assignedType == Float.class) {
+			return jsonValue.floatValue();
+		}
+		if (assignedType == double.class || assignedType == Double.class) {
+			return jsonValue.doubleValue();
+		}
+		if (assignedType == byte.class || assignedType == Byte.class) {
+			return jsonValue.byteValueExact();
+		}
+		if (assignedType == short.class || assignedType == Short.class) {
+			return jsonValue.shortValueExact();
+		}
+		//TODO Exception werfen: Hier und wenn bei Funktionsausführung Exception auftritt
+		return null;
 	}
 }
