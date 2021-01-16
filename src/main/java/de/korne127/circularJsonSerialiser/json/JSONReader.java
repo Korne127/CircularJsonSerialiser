@@ -5,8 +5,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * JSONReader-Klasse:<br>
+ * Diese Klasse verfügt über statische Methoden um Inhalte eines JSON-Strings einzulesen
+ * und in JSON-Elemente umzuwandeln.
+ * @author Korne127
+ */
 class JSONReader {
 
+	/**
+	 * Enum, das den Status des Einlesens eines Arrays im JSON-String repräsentiert
+	 */
 	private enum ObjectReadingState {
 		BEFORE_KEY,
 		KEY,
@@ -15,11 +24,22 @@ class JSONReader {
 		AFTER_VALUE
 	}
 
+	/**
+	 * Enum, das den Status des Einlesens eines Arrays im JSON-String repräsentiert
+	 */
 	private enum ArrayReadingState {
 		VALUE,
 		AFTER_VALUE
 	}
 
+	/**
+	 * Transformiert einen bestimmten String mit der angegebenen Position, an der die
+	 * Kodierung eines JSON-Objektes startet in das JSON-Objekt
+	 * @param content Der String, in dem sich das kodierte JSON-Objekt befindet
+	 * @param iteratorStart Die Position im String, an der das kodierte JSON-Objekt beginnt
+	 * @return Ein JSONResult, welches aus dem JSON-Objekt, welches aus der Kodierung hergestellt
+	 * wurde sowie der Position im String, an der die Kodierung des JSON-Objektes endet, besteht
+	 */
 	static JSONResult readObject(String content, int iteratorStart) {
 		if (content.charAt(iteratorStart) != '{') {
 			//TODO Hier eine Exception werfen
@@ -88,6 +108,14 @@ class JSONReader {
 		return null;
 	}
 
+	/**
+	 * Transformiert einen bestimmten String mit der angegebenen Position, an der die
+	 * Kodierung eines JSON-Arrays startet in das JSON-Array
+	 * @param content Der String, in dem sich das kodierte JSON-Array befindet
+	 * @param iteratorStart Die Position im String, an der das kodierte JSON-Array beginnt
+	 * @return Ein JSONResult, welches aus dem JSON-Array, welches aus der Kodierung hergestellt
+	 * wurde sowie der Position im String, an der die Kodierung des JSON-Arrays endet, besteht
+	 */
 	static JSONResult readArray(String content, int iteratorStart) {
 		if (content.charAt(iteratorStart) != '[') {
 			//TODO Hier eine Exception werfen
@@ -133,6 +161,14 @@ class JSONReader {
 		return null;
 	}
 
+	/**
+	 * Transformiert einen bestimmten String mit der angegebenen Position, an der die
+	 * Kodierung eines Strings startet in diesen String
+	 * @param content Der String, in dem sich der kodierte String befindet
+	 * @param iteratorStart Die Position im String, an der der kodierte String beginnt
+	 * @return Ein JSONResult, welches aus dem String, welcher aus der Kodierung hergestellt
+	 * wurde sowie der Position im String, an der die Kodierung des Strings endet, besteht
+	 */
 	private static JSONResult readString(String content, int iteratorStart) {
 		if (content.charAt(iteratorStart) != '\"') {
 			//TODO Hier eine Exception werfen
@@ -169,6 +205,14 @@ class JSONReader {
 		return  null;
 	}
 
+	/**
+	 * Transformiert einen bestimmten String mit der angegebenen Position, an der die
+	 * Kodierung eines primitiven Typens startet in den primitiven Datentypen.
+	 * @param content Der String, in dem sich der primitive Datentyp befindet
+	 * @param iteratorStart Die Position im String, an der der primitive Datentyp beginnt
+	 * @return Ein JSONResult, welches aus dem primitiven Datentypen, welches aus der Kodierung
+	 * hergestellt wurde sowie der Position im String, an der die Kodierung des Typen endet, besteht
+	 */
 	private static JSONResult readBasicType(String content, int iteratorStart) {
 		Object value;
 		int iteratorSkip;
