@@ -9,8 +9,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import de.korne127.circularJsonSerialiser.annotations.SerialiseIgnore;
-import org.json.JSONArray;
-import org.json.JSONObject;
+import de.korne127.circularJsonSerialiser.json.JSONArray;
+import de.korne127.circularJsonSerialiser.json.JSONObject;
 
 /**
  * Serialiser-Klasse:<br>
@@ -35,7 +35,7 @@ public class Serialiser {
 	public String serialiseObject(Object object) {
 		hashTable = new HashMap<>();
 		try {
-			return ((JSONObject) objectToJson(object)).toString(4);
+			return objectToJson(object).toString();
 		} catch (IllegalAccessException e) {
 			System.err.println("Fatal Error: Object could not be serialised.");
 			e.printStackTrace();
