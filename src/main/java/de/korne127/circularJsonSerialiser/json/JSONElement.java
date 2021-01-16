@@ -44,7 +44,17 @@ interface JSONElement {
 			return "'" + object + "'";
 		}
 		if (Serialiser.isSimpleType(object.getClass()) || object instanceof Boolean) {
-			return object.toString();
+			if (object instanceof Byte) {
+				return object.toString() + "B";
+			} else if (object instanceof Short) {
+				return object.toString() + "S";
+			} else if (object instanceof Long) {
+				return object.toString() + "L";
+			} else if (object instanceof Float) {
+				return object.toString() + "F";
+			} else {
+				return object.toString();
+			}
 		}
 		return "\"" + object + "\"";
 	}

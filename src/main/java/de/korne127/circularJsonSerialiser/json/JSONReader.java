@@ -1,6 +1,5 @@
 package de.korne127.circularJsonSerialiser.json;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -201,11 +200,55 @@ class JSONReader {
 			}
 			String numberString = builder.toString().trim();
 			value = 0;
-
-			try {
-				value = new BigDecimal(numberString);
-			} catch (NumberFormatException e) {
+			if (numberString.equals("")) {
 				//TODO Hier eine Exception werfen
+			}
+
+			char lastLetter = numberString.charAt(numberString.length() - 1);
+			switch (lastLetter) {
+				case 'B':
+					try {
+						value = Byte.parseByte(numberString.substring(0, numberString.length() - 1));
+					} catch (NumberFormatException e) {
+						//TODO Hier eine Exception werfen
+					}
+					break;
+				case 'S':
+					try {
+						value = Short.parseShort(numberString.substring(0, numberString.length() - 1));
+					} catch (NumberFormatException e) {
+						//TODO Hier eine Exception werfen
+					}
+					break;
+				case 'L':
+					try {
+						value = Long.parseLong(numberString.substring(0, numberString.length() - 1));
+					} catch (NumberFormatException e) {
+						//TODO Hier eine Exception werfen
+					}
+					break;
+				case 'F':
+					try {
+						value = Float.parseFloat(numberString.substring(0, numberString.length() - 1));
+					} catch (NumberFormatException e) {
+						//TODO Hier eine Exception werfen
+					}
+					break;
+				default:
+					if (numberString.contains(".") || numberString.contains("e") || numberString.contains("E")) {
+						try {
+							value = Double.parseDouble(numberString);
+						} catch (NumberFormatException e) {
+							//TODO Hier eine Exception werfen
+						}
+					} else {
+						try {
+							value = Integer.parseInt(numberString);
+						} catch (NumberFormatException e) {
+							//TODO Hier eine Exception werfen
+						}
+					}
+					break;
 			}
 
 		}
