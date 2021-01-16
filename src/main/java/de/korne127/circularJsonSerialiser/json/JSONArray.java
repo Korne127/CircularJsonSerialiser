@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-public class JSONArray implements Iterable<Object>, JSONElement {
+public class JSONArray implements JSONElement {
 
 	private final List<Object> list;
 
@@ -37,9 +37,12 @@ public class JSONArray implements Iterable<Object>, JSONElement {
 		return list.size();
 	}
 
-	@Override
-	public Iterator<Object> iterator() {
-		return list.iterator();
+	public Iterable<Object> skipFirst() {
+		return () -> {
+			Iterator<Object> iterator = list.iterator();
+			iterator.next();
+			return iterator;
+		};
 	}
 
 	public String toString(int indentFactor) {

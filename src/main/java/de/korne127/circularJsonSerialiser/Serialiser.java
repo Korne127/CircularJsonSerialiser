@@ -261,8 +261,7 @@ public class Serialiser {
 				@SuppressWarnings("unchecked")
 				Collection<Object> newCollection = (Collection<Object>) newObject;
 				hashTable.put(hash, newCollection);
-				for (Object jsonArrayPart : jsonArray) {
-					if (jsonArrayPart == jsonArray.get(0)) continue; //TODO besser
+				for (Object jsonArrayPart : jsonArray.skipFirst()) {
 					newCollection.add(jsonToObject(jsonArrayPart));
 				}
 				return newCollection;
@@ -271,8 +270,7 @@ public class Serialiser {
 				@SuppressWarnings("unchecked")
 				Map<Object, Object> newMap = (Map<Object, Object>) newObject;
 				hashTable.put(hash, newMap);
-				for (Object jsonArrayPart : jsonArray) {
-					if (jsonArrayPart == jsonArray.get(0)) continue; //TODO besser
+				for (Object jsonArrayPart : jsonArray.skipFirst()) {
 					JSONObject jsonArrayChild = (JSONObject) jsonArrayPart;
 					Object childKey = jsonToObject(jsonArrayChild.get("key"));
 					Object chilValue = jsonToObject(jsonArrayChild.get("value"));
@@ -361,8 +359,7 @@ public class Serialiser {
 			if (!newClass.isArray()) {
 				Object newObject = getNewInstance(newClass);
 				if (newObject instanceof Map) {
-					for (Object jsonArrayPart : jsonArray) {
-						if (jsonArrayPart == jsonArray.get(0)) continue; //TODO besser machen
+					for (Object jsonArrayPart : jsonArray.skipFirst()) {
 						JSONObject mapPart = (JSONObject) jsonArrayPart;
 						Object keyPart = getLinkedObject(mapPart.get("key"), searchedHash);
 						if (keyPart != null) {
@@ -376,8 +373,7 @@ public class Serialiser {
 					return null;
 				}
 			}
-			for (Object jsonArrayPart : jsonArray) {
-				if (jsonArrayPart == jsonArray.get(0)) continue; //TODO besser machen
+			for (Object jsonArrayPart : jsonArray.skipFirst()) {
 				Object arrayPart = getLinkedObject(jsonArrayPart, searchedHash);
 				if (arrayPart != null) {
 					return arrayPart;
