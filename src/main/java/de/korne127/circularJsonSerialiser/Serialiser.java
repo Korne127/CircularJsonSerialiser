@@ -1,12 +1,36 @@
 package de.korne127.circularJsonSerialiser;
 
+import javax.script.Bindings;
+import javax.script.SimpleBindings;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
+import java.util.Queue;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.SortedSet;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.concurrent.BlockingDeque;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.LinkedTransferQueue;
+import java.util.concurrent.TransferQueue;
 
 import de.korne127.circularJsonSerialiser.annotations.SerialiseIgnore;
 import de.korne127.circularJsonSerialiser.exceptions.DeserialiseException;
@@ -27,6 +51,32 @@ public class Serialiser {
 	private Map<Integer, Object> hashTable;
 
 	private JSONObject wholeJson;
+
+	private final boolean autoConvertCollections;
+
+	/**
+	 * Der standardmäßige Konstruktor der Serialiser-Klasse:<br>
+	 * Erstellt einen neuen Serialiser.<br>
+	 * Ruft intern {@link #Serialiser(boolean) Serialiser(true)} auf.
+	 */
+	public Serialiser() {
+		this(true);
+	}
+
+	/**
+	 * Ein Konstruktor der Serialiser-Klasse:<br>
+	 * Erstellt einen neuen Serialiser und stellt ein, ob wenn eine Collection oder Map nicht deserialisiert
+	 * werden konnte, automatisch versucht werden soll, einen andere passende Collection/Map-Klasse zu benutzen,
+	 * oder ob eine Exception geworfen werden soll
+	 * @param autoConvertCollections true - Falls eine Collection oder Map nicht deserialisiert werden kann,
+	 *                               soll versucht werden, eine andere passende Collection/Map-Klasse zu
+	 *                               benutzen;<br>
+	 *                               false - Falls eine Collection oder Map nicht deserialisiert werden kann,
+	 *                               soll eine {@link DeserialiseException} geworfen werden.
+	 */
+	public Serialiser(boolean autoConvertCollections) {
+		this.autoConvertCollections = autoConvertCollections;
+	}
 
 	/**
 	 * Konvertiert das angegebene Objekt zu einem JSON-Objekt, welches als String zurückgegeben wird.<br>
@@ -281,7 +331,21 @@ public class Serialiser {
 				}
 				return newArray;
 			}
-			Object newObject = getNewInstance(newClass);
+			Object newObject;
+			if (autoConvertCollections) {
+				try {
+					newObject = getNewInstance(newClass);
+				} catch (DeserialiseException e) {
+					newObject = getNewAlternativeInstance(newClass, e);
+					e.printStackTrace();
+					System.err.println("WARNING: Class " + newClass +
+							" has been converted to class " + newObject.getClass() +
+							".\nThis might lead to a ClassCastException!\nIt is recommended not to use " +
+							"this Collection or Map type (" + newClass + ")!");
+				}
+			} else {
+				newObject = getNewInstance(newClass);
+			}
 			if (newObject instanceof Collection) {
 				@SuppressWarnings("unchecked")
 				Collection<Object> newCollection = (Collection<Object>) newObject;
@@ -460,5 +524,57 @@ public class Serialiser {
 			throw new DeserialiseException("The default constructor of class " +
 					objectClass.getName() + " threw an exception.", e);
 		}
+	}
+
+	/**
+	 * Sucht nach einer alternativen Klasse, falls keine Instanz der eigentlichen Collection / Map erstellt
+	 * werden konnte.
+	 * @param objectClass Die eigentliche Klasse, von der keine Instanz erstellt werden konnte
+	 * @param cause Die Exception, die geworfen wurde, als versucht wurde, die eigentliche Klasse zu erstellen
+	 * @return Eine Instanz aus einer Alternativklasse
+	 * @throws DeserialiseException Wird geworfen, wenn keine Alternativklasse gefunden werden konnte.
+	 */
+	private Object getNewAlternativeInstance(Class<?> objectClass, Exception cause) throws DeserialiseException {
+		if (List.class.isAssignableFrom(objectClass)) {
+			return new ArrayList<>();
+		}
+		if (Set.class.isAssignableFrom(objectClass)) {
+			if (SortedSet.class.isAssignableFrom(objectClass)) {
+				return new TreeSet<>();
+			}
+			return new LinkedHashSet<>();
+		}
+		if (Map.class.isAssignableFrom(objectClass)) {
+			if (SortedMap.class.isAssignableFrom(objectClass)) {
+				if (ConcurrentNavigableMap.class.isAssignableFrom(objectClass)) {
+					return new ConcurrentSkipListMap<>();
+				}
+				return new TreeMap<>();
+			}
+			if (ConcurrentMap.class.isAssignableFrom(objectClass)) {
+				return new ConcurrentHashMap<>();
+			}
+			if (Bindings.class.isAssignableFrom(objectClass)) {
+				return new SimpleBindings();
+			}
+			return new LinkedHashMap<>();
+		}
+		if (Queue.class.isAssignableFrom(objectClass)) {
+			if (BlockingQueue.class.isAssignableFrom(objectClass)) {
+				if (TransferQueue.class.isAssignableFrom(objectClass)) {
+					return new LinkedTransferQueue<>();
+				}
+				if (BlockingDeque.class.isAssignableFrom(objectClass)) {
+					return new LinkedBlockingDeque<>();
+				}
+				return new LinkedBlockingQueue<>();
+			}
+			if (Deque.class.isAssignableFrom(objectClass)) {
+				return new LinkedList<>();
+			}
+			return new LinkedList<>();
+		}
+		throw new DeserialiseException("Class " + objectClass + " could not be instantiated and no alternative " +
+				"class could be found.", cause);
 	}
 }
