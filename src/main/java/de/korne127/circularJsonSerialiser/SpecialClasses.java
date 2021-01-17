@@ -1,7 +1,16 @@
 package de.korne127.circularJsonSerialiser;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.time.LocalTime;
+import java.time.ZonedDateTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
 /**
@@ -18,7 +27,50 @@ import java.util.function.Function;
  */
 enum SpecialClasses {
 
-	;
+	//Datumsklassen
+	LOCAL_DATE_TIME(LocalDateTime.class,
+			object -> {
+				LocalDateTime localDateTime = (LocalDateTime) object;
+				return localDateTime.format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+			},
+			LocalDateTime::parse),
+	LOCAL_DATE(LocalDate.class,
+			object -> {
+				LocalDate localDate = (LocalDate) object;
+				return localDate.format(DateTimeFormatter.ISO_LOCAL_DATE);
+			},
+			LocalDate::parse),
+	LOCAL_TIME(LocalTime.class,
+			object -> {
+				LocalTime localTime = (LocalTime) object;
+				return localTime.format(DateTimeFormatter.ISO_LOCAL_TIME);
+			},
+			LocalTime::parse),
+	ZONED_DATE_TIME(ZonedDateTime.class,
+			object -> {
+				ZonedDateTime zonedDateTime = (ZonedDateTime) object;
+				return zonedDateTime.format(DateTimeFormatter.ISO_ZONED_DATE_TIME);
+			},
+			ZonedDateTime::parse),
+
+
+	//Unterklassen von Number
+	ATOMIC_INTEGER(AtomicInteger.class,
+			Object::toString,
+			string -> {
+				return new AtomicInteger(Integer.parseInt(string));
+			}),
+	ATOMIC_LONG(AtomicLong.class,
+			Object::toString,
+			string -> {
+				return new AtomicLong(Integer.parseInt(string));
+			}),
+	BIG_INTEGER(BigInteger.class,
+			Object::toString,
+			BigInteger::new),
+	BIG_DECIMAL(BigDecimal.class,
+			Object::toString,
+			BigDecimal::new);
 
 	private static final Map<String, SpecialClasses> classMap = new HashMap<>();
 	static {
