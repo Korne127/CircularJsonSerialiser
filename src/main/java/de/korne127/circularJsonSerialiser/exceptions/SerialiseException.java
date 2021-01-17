@@ -8,6 +8,14 @@ package de.korne127.circularJsonSerialiser.exceptions;
 public class SerialiseException extends Exception {
 
 	/**
+	 * Erstellt eine SerialiseException mit einer angegebenen Fehlernachricht.
+	 * @param message Die angegebene Fehlernachricht
+	 */
+	public SerialiseException(String message) {
+		super(message);
+	}
+
+	/**
 	 * Erstellt eine SerialiseException mit einer angegebenen Fehlernachricht und einem Verursacher
 	 * der Exception.
 	 * @param message Die angegebene Fehlernachricht

@@ -66,7 +66,7 @@ public class Serialiser {
 		if (isSimpleType(objectClass)) {
 			if (objectClass == String.class) {
 				String string = (String) object;
-				if (string.matches("(\\\\)*@.*")) {
+				if (string.matches("(\\\\)*[@#].*")) {
 					string = "\\" + string;
 					return string;
 				}
@@ -114,6 +114,15 @@ public class Serialiser {
 				map.put(mapChild);
 			}
 			return map;
+		}
+		if (SpecialClasses.getClassMap().containsKey(objectClass.getName())) {
+			SpecialClasses specialClass = SpecialClasses.getClassMap().get(objectClass.getName());
+			String result = specialClass.serialise(object);
+			if (result == null) {
+				throw new SerialiseException("Object from class "
+						+ objectClass.getName() + " could not be deserialised.");
+			}
+			return "#" + specialClass.getSpecialClassName() + "=" + result;
 		}
 		JSONObject jsonObject = new JSONObject();
 		jsonObject.put("class", objectClass.getName() + "=" + objectHash);
@@ -223,7 +232,23 @@ public class Serialiser {
 					}
 					return linkedObject;
 				}
-				if (string.matches("(\\\\)+@.*")) {
+				if (string.charAt(0) == '#') {
+					String[] classInfos = string.split("=");
+					String className = classInfos[0].substring(1);
+					String classValue = classInfos[1];
+					if (SpecialClasses.getClassMap().containsKey(className)) {
+						SpecialClasses specialClass = SpecialClasses.getClassMap().get(className);
+						Object result = specialClass.deserialise(classValue);
+						if (result == null) {
+							throw new DeserialiseException("Instance " + classValue + " of class "
+									+ className + " could not be deserialised.");
+						}
+						return result;
+					}
+					throw new DeserialiseException("The definition of the special class " +
+							className + " could not be found.");
+				}
+				if (string.matches("(\\\\)+[@#].*")) {
 					return string.substring(1);
 				}
 				return string;
