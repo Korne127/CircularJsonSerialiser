@@ -1,5 +1,6 @@
 package de.korne127.circularJsonSerialiser.json;
 
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -90,6 +91,24 @@ public class JSONObject implements JSONElement {
 	 */
 	public Iterable<String> keySet() {
 		return map.keySet();
+	}
+
+	/**
+	 * Gibt zurück, ob ein bestimmter key in der Map enthalten ist
+	 * @param key Der key, zu dem geprüft werden soll, ob er in der Map enthalten ist
+	 * @return true - der key ist in der Map enthalten;<br>
+	 *     false - der key ist nicht in der Map enthalten
+	 */
+	public boolean containsKey(String key) {
+		return map.containsKey(key);
+	}
+
+	/**
+	 * Gibt eine Collection mit allen values aus der Map zurück
+	 * @return Eine Collection mit allen values aus der Map
+	 */
+	public Collection<Object> values() {
+		return map.values();
 	}
 
 	/**

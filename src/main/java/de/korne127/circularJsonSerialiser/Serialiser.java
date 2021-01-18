@@ -32,6 +32,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TransferQueue;
 
+import de.korne127.circularJsonSerialiser.annotations.SerialiseFile;
 import de.korne127.circularJsonSerialiser.annotations.SerialiseIgnore;
 import de.korne127.circularJsonSerialiser.exceptions.DeserialiseException;
 import de.korne127.circularJsonSerialiser.exceptions.JsonParseException;
@@ -50,7 +51,9 @@ public class Serialiser {
 
 	private Map<Integer, Object> hashTable;
 
-	private JSONObject wholeJson;
+	private Map<String, JSONObject> wholeSeperatedJson;
+	private JSONObject wholeSingleJson;
+	private boolean multiFile;
 
 	private final boolean autoConvertCollections;
 
@@ -88,8 +91,41 @@ public class Serialiser {
 	 */
 	public String serialiseObject(Object object) throws SerialiseException {
 		hashTable = new HashMap<>();
+		multiFile = false;
 
 		return objectToJson(object).toString();
+	}
+
+	/**
+	 * Konvertiert das angegebene Objekt zu mehreren JSON-Objekten, welche in Dateien unterteilt als Strings
+	 * in einer Map zurückgegeben werden. Dabei bestimmen die SerialiseFile Annotations an einer Klasse in
+	 * welcher Datei ein Objekt der Klasse zurückgegeben wird.<br>
+	 * Für Implementierungsdetails, siehe {@link #objectToJson(Object object)}.
+	 * @param object Das Objekt, welches zu JSON-Objekten konvertiert werden soll
+	 * @return Die aus dem angegebenen Objekt kodierten JSON-Objekte in einer Map zum Dateinamen zugeordnet
+	 * @throws SerialiseException Wird geworfen, falls ein Fehler beim Serialisen des Objektes
+	 * aufgetreten ist.
+	 */
+	public Map<String, String> serialiseObjectSeparated(Object object) throws SerialiseException {
+		hashTable = new HashMap<>();
+		wholeSeperatedJson = new HashMap<>();
+		multiFile = true;
+
+		Object mainObject = objectToJson(object);
+		String mainFileName = getFileName(object.getClass());
+		if (wholeSeperatedJson.containsKey(mainFileName)) {
+			wholeSeperatedJson.get(mainFileName).put("Main", mainObject);
+		} else {
+			JSONObject newObject = new JSONObject();
+			newObject.put("Main", mainObject);
+			wholeSeperatedJson.put(mainFileName, newObject);
+		}
+
+		Map<String, String> resultMap = new HashMap<>();
+		for (String key : wholeSeperatedJson.keySet()) {
+			resultMap.put(key, wholeSeperatedJson.get(key).toString());
+		}
+		return resultMap;
 	}
 
 	/**
@@ -97,11 +133,13 @@ public class Serialiser {
 	 * Falls das angegebene Objekt null oder {@link #isSimpleType(Class) simpel} ist, wird es zurückgegeben.<br>
 	 * Falls das angegebene Objekt bereits an einer anderen Stelle gespeichert wird, wird nur ein Verweis auf
 	 * diese Stelle gespeichert und zurückgegeben.<br>
-	 * Falls das angegebene Objekt ein Array oder eine Collection ist, wird die Methode für alle Elemente aufgerufen
-	 * und zusammen in einem JSON-Array zurückgegeben.<br>
-	 * Falls das angegebene Objekt eine Map ist, wird die Methode für alle Keys und dazugehörigen Values aufgerufen,
-	 * je ein Key und der dazugehörige value in einem JSON-Objekt gespeichert und alle JSON-Objekte in einem
-	 * JSON-Array zurückgegeben.<br>
+	 * Falls das angegebene Objekt in einer anderen Datei gespeichert werden soll, wird nur ein Verweis auf die
+	 * Stelle in der anderen Datei gespeichert und das Objekt an dieser Stelle gespeichert.<br>
+	 * Falls das angegebene Objekt ein Array oder eine Collection ist, wird die Methode für alle Elemente
+	 * aufgerufen und zusammen in einem JSON-Array zurückgegeben.<br>
+	 * Falls das angegebene Objekt eine Map ist, wird die Methode für alle Keys und dazugehörigen Values
+	 * aufgerufen, je ein Key und der dazugehörige value in einem JSON-Objekt gespeichert und alle JSON-Objekte
+	 * in einem JSON-Array zurückgegeben.<br>
 	 * Ansonsten werden alle Felder des Objektes (und aller Oberklassen) durchgegangen und aufgerufen und in
 	 * einem JSON-Objekt gespeichert, welches dann zurückgegeben wird.
 	 * @param object Das Objekt, welches zu einem für JSON benutzbaren Objekt umgewandelt werden soll
@@ -190,7 +228,22 @@ public class Serialiser {
 							objectField.getName() +" in the class " + objectField.getDeclaringClass() +
 							" could not be retrieved.", e);
 				}
-				jsonObject.put(objectField.getName(), objectToJson(child));
+				String fileName = getFileName(objectField.getType());
+				Object childObject = objectToJson(child);
+				if (!multiFile || childObject == null || isSimpleType(childObject.getClass()) ||
+						fileName.equals(getFileName(objectField.getDeclaringClass()))) {
+					jsonObject.put(objectField.getName(), childObject);
+				} else {
+					int childHash = System.identityHashCode(child);
+					jsonObject.put(objectField.getName(), "@" + fileName + "#" + childHash);
+					if (wholeSeperatedJson.containsKey(fileName)) {
+						wholeSeperatedJson.get(fileName).put(String.valueOf(childHash), childObject);
+					} else {
+						JSONObject newObject = new JSONObject();
+						newObject.put(String.valueOf(childHash), childObject);
+						wholeSeperatedJson.put(fileName, newObject);
+					}
+				}
 			}
 			objectClass = objectClass.getSuperclass();
 		}
@@ -239,9 +292,38 @@ public class Serialiser {
 	 */
 	public Object deserialiseObject(String content) throws JsonParseException, DeserialiseException {
 		hashTable = new HashMap<>();
-		wholeJson = new JSONObject(content);
+		wholeSingleJson = new JSONObject(content);
+		multiFile = false;
 
-		return jsonToObject(wholeJson);
+		return jsonToObject(wholeSingleJson);
+	}
+
+	/**
+	 * Berechnet aus den angegebenen JSON-Strings, die zum Dateinamen in einer Map zugeordnet sind ein
+	 * Objekt, welches zurückgegeben wird.<br>
+	 * Für Implementierungsdetails, siehe {@link #jsonToObject(Object object)}.
+	 * @param content Die JSON-Strings, die zum Dateinamen in einer Map geordnet sind, aus denen ein
+	 *                Objekt berechnet werden soll
+	 * @return Das aus den angegebenen JSON-Strings berechnete Objekt
+	 * @throws JsonParseException Wird geworfen, falls einer der JSON-Strings nicht geparst werden konnte.
+	 * @throws DeserialiseException Wird geworfen, falls ein Fehler beim Deserialisieren des Objektes
+	 * aufgetreten ist.
+	 */
+	public Object deserialiseSeparatedObject(Map<String, String> content)
+			throws JsonParseException, DeserialiseException {
+		hashTable = new HashMap<>();
+		wholeSeperatedJson = new HashMap<>();
+		for (String key : content.keySet()) {
+			wholeSeperatedJson.put(key, new JSONObject(content.get(key)));
+		}
+		multiFile = true;
+
+		for (String key : wholeSeperatedJson.keySet()) {
+			if (wholeSeperatedJson.get(key).containsKey("Main")) {
+				return jsonToObject(wholeSeperatedJson.get(key).get("Main"));
+			}
+		}
+		throw new DeserialiseException("The main object could not be found.");
 	}
 
 	/**
@@ -274,8 +356,19 @@ public class Serialiser {
 					return string;
 				}
 				if (string.charAt(0) == '@') {
+					if (multiFile && string.contains("#")) {
+						String[] linkInfo = string.substring(1).split("#");
+						String fileName = linkInfo[0];
+						int hash = Integer.parseInt(linkInfo[1]);
+						Object linkedObject = getLinkedFileObject(fileName, hash);
+						if (linkedObject == null) {
+							throw new DeserialiseException("The definition of the linked object " +
+									string + " could not be found.");
+						}
+						return linkedObject;
+					}
 					int hash = Integer.parseInt(string.substring(1));
-					Object linkedObject = getLinkedObject(wholeJson, hash);
+					Object linkedObject = getLinkedObject(multiFile ? wholeSeperatedJson : wholeSingleJson, hash);
 					if (linkedObject == null) {
 						throw new DeserialiseException("The definition of the linked object " +
 								string + " could not be found.");
@@ -422,6 +515,8 @@ public class Serialiser {
 	 * Falls das angegebene Objekt ein Array oder Iterable ist und nicht das Objekt mit dem gesuchten Hash
 	 * ist, wird diese Methode für jedes Unterobjekt aufgerufen und null zurückgegeben, falls kein Aufruf das
 	 * Objekt findet.<br>
+	 * Falls das angegebene Objekt die globale Json Map ist, wird diese Methode für jedes Objekt in jeder
+	 * Datei dieser Map aufgerufen und null zurückgegeben, falls kein Aufruf das Objekt findet.<br>
 	 * Ansonsten wird diese Methode für jedes Feld des Objektes aufgerufen und null zurückgegeben, fassl kein
 	 * Aufruf das Objekt findet.
 	 * @param json Das für Json benutzbare Objekt, welches nach dem Objekt mit dem angegebenen Hash durchsucht
@@ -481,6 +576,19 @@ public class Serialiser {
 			}
 			return null;
 		}
+		if (json instanceof Map) {
+			@SuppressWarnings("unchecked")
+			Map<String, JSONObject> jsonMap = (Map<String, JSONObject>) json;
+			for (JSONObject value : jsonMap.values()) {
+				for (Object object : value.values()) {
+					Object linkedObject = getLinkedObject(object, searchedHash);
+					if (linkedObject != null) {
+						return linkedObject;
+					}
+				}
+			}
+			return null;
+		}
 		JSONObject jsonObject = (JSONObject) json;
 		int hash = Integer.parseInt(jsonObject.getString("class").split("=")[1]);
 		if (hash == searchedHash) {
@@ -496,7 +604,25 @@ public class Serialiser {
 	}
 
 	/**
-	 * Hilfsmethode<br>
+	 * Gibt das Objekt mit dem angegebenen Hash in der angegebenen Datei zurück, falls es dort gespeichert
+	 * wurde, ansonsten null.
+	 * @param fileName Der Name der Datei, in der gesucht werden soll
+	 * @param searchedHash Der Hash des Objektes, das zurückgegeben werden soll
+	 * @return Das Objekt mit dem angegebenen Hash in der angegebenen Datek, falls es dort gespeichert
+	 * wurde, ansonsten null
+	 * @throws DeserialiseException Wird geworfen, falls ein Fehler aufgetreten ist, während das verlinkte
+	 * Objekt gesucht wurde
+	 */
+	private Object getLinkedFileObject(String fileName, int searchedHash) throws DeserialiseException {
+		JSONObject value = wholeSeperatedJson.get(fileName);
+		if (value.containsKey(String.valueOf(searchedHash))) {
+			return jsonToObject(value.get(String.valueOf(searchedHash)));
+		}
+		return null;
+	}
+
+	/**
+	 * Hilfsmethode:<br>
 	 * Gibt eine neue Instanz einer angegebenen Klasse zurück.<br>
 	 * Dafür wird der Standardkonstruktor der Klasse ausgeführt und die neue Instanz zurückgegeben.
 	 * @param objectClass Die angegebene Klasse, von der eine neue Instanz zurückgegeben werden soll
@@ -527,6 +653,7 @@ public class Serialiser {
 	}
 
 	/**
+	 * Hilfsmethode:<br>
 	 * Sucht nach einer alternativen Klasse, falls keine Instanz der eigentlichen Collection / Map erstellt
 	 * werden konnte.
 	 * @param objectClass Die eigentliche Klasse, von der keine Instanz erstellt werden konnte
@@ -576,5 +703,19 @@ public class Serialiser {
 		}
 		throw new DeserialiseException("Class " + objectClass + " could not be instantiated and no alternative " +
 				"class could be found.", cause);
+	}
+
+	/**
+	 * Hilfsmethode:<br>
+	 * Gibt den Namen der Datei zurück, in die eine Instanz der angegebenen Klasse gespeichert werden soll
+	 * @param fieldClass Die angegebene Klasse
+	 * @return Der Name der Datei, in die eine Instanz der angegebenen Klasse gespeichert werden soll
+	 */
+	private String getFileName(Class<?> fieldClass) {
+		String fileName = "Standard";
+		if (fieldClass.isAnnotationPresent(SerialiseFile.class)) {
+			fileName = fieldClass.getDeclaredAnnotation(SerialiseFile.class).value();
+		}
+		return fileName;
 	}
 }
