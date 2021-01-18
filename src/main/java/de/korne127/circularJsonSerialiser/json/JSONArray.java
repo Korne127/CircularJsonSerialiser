@@ -52,7 +52,7 @@ public class JSONArray implements JSONElement {
 		try {
 			return list.get(index);
 		} catch (IndexOutOfBoundsException e) {
-			throw new DeserialiseException("JSON-Array child not found.", e);
+			throw new DeserialiseException("JSON-Array child could not be found.", e);
 		}
 	}
 

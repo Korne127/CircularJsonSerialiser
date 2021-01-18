@@ -67,7 +67,7 @@ public class JSONObject implements JSONElement {
 		if (map.containsKey(key)) {
 			return map.get(key);
 		}
-		throw new DeserialiseException("JSON-Object child not found.");
+		throw new DeserialiseException("JSON-Object child could not be found.");
 	}
 
 	/**
