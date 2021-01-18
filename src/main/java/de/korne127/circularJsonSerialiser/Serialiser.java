@@ -251,36 +251,6 @@ public class Serialiser {
 	}
 
 	/**
-	 * Hilfsmethode<br>
-	 * Prüft, ob eine angegebene Klasse die Klasse eines Wrapper-Objektes eines simplen Datentyps oder ein
-	 * String ist.
-	 * @param objectClass Die Klasse, die geprüft werden soll
-	 * @return true, falls die angegebene Klasse die Klasse eines Wrapper-Objektes eines simplen Datentyps
-	 * oder ein String ist, ansonsten false
-	 */
-	public static boolean isSimpleType(Class<?> objectClass) {
-		return (objectClass == Integer.class || objectClass == Byte.class || objectClass == Short.class ||
-				objectClass == Long.class || objectClass == Float.class || objectClass == Double.class ||
-				objectClass == Character.class || objectClass == Boolean.class || objectClass == String.class);
-	}
-
-	/**
-	 * Hilfsmethode<br>
-	 * Konvertiert ein Array eines primitiven Datentyps (z.B. int) in ein Array des Wrapper-Objektes dieses
-	 * Datentyps (z.B. Integer).
-	 * @param val Das Array eines primitiven Datentyps, welches konvertiert werden soll
-	 * @return Das konvertierte Array eines Wrapper-Objektes
-	 */
-	private Object[] convertPrimitiveToArray(Object val) {
-		int length = Array.getLength(val);
-		Object[] outputArray = new Object[length];
-		for(int i = 0; i < length; i++){
-			outputArray[i] = Array.get(val, i);
-		}
-		return outputArray;
-	}
-
-	/**
 	 * Berechnet aus dem angegebenen JSON-String ein Objekt, welches zurückgegeben wird.<br>
 	 * Für Implementierungsdetails, siehe {@link #jsonToObject(Object object)}.
 	 * @param content Der JSON-String, aus dem ein Objekt berechnet werden soll
@@ -623,6 +593,22 @@ public class Serialiser {
 
 	/**
 	 * Hilfsmethode:<br>
+	 * Konvertiert ein Array eines primitiven Datentyps (z.B. int) in ein Array des Wrapper-Objektes dieses
+	 * Datentyps (z.B. Integer).
+	 * @param val Das Array eines primitiven Datentyps, welches konvertiert werden soll
+	 * @return Das konvertierte Array eines Wrapper-Objektes
+	 */
+	private Object[] convertPrimitiveToArray(Object val) {
+		int length = Array.getLength(val);
+		Object[] outputArray = new Object[length];
+		for(int i = 0; i < length; i++){
+			outputArray[i] = Array.get(val, i);
+		}
+		return outputArray;
+	}
+
+	/**
+	 * Hilfsmethode:<br>
 	 * Gibt eine neue Instanz einer angegebenen Klasse zurück.<br>
 	 * Dafür wird der Standardkonstruktor der Klasse ausgeführt und die neue Instanz zurückgegeben.
 	 * @param objectClass Die angegebene Klasse, von der eine neue Instanz zurückgegeben werden soll
@@ -717,5 +703,19 @@ public class Serialiser {
 			fileName = fieldClass.getDeclaredAnnotation(SerialiseFile.class).value();
 		}
 		return fileName;
+	}
+
+	/**
+	 * Hilfsmethode:<br>
+	 * Prüft, ob eine angegebene Klasse die Klasse eines Wrapper-Objektes eines simplen Datentyps oder ein
+	 * String ist.
+	 * @param objectClass Die Klasse, die geprüft werden soll
+	 * @return true, falls die angegebene Klasse die Klasse eines Wrapper-Objektes eines simplen Datentyps
+	 * oder ein String ist, ansonsten false
+	 */
+	public static boolean isSimpleType(Class<?> objectClass) {
+		return (objectClass == Integer.class || objectClass == Byte.class || objectClass == Short.class ||
+				objectClass == Long.class || objectClass == Float.class || objectClass == Double.class ||
+				objectClass == Character.class || objectClass == Boolean.class || objectClass == String.class);
 	}
 }
