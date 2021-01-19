@@ -132,7 +132,7 @@ public class Serialiser {
 			wholeSeperatedJson.get(mainFileName).put("Main", mainObject);
 		} else {
 			JSONObject newObject = new JSONObject();
-			newObject.put("Main", mainObject);
+			newObject.putFirst("Main", mainObject);
 			wholeSeperatedJson.put(mainFileName, newObject);
 		}
 

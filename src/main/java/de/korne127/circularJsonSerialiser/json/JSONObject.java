@@ -57,6 +57,17 @@ public class JSONObject implements JSONElement {
 	}
 
 	/**
+	 * Setzt einen key mit einem dazugehörigen value in die Map.
+	 * @param key Der key, der in die Map gesetzt werden soll
+	 * @param value Der zu dem key dagehörige value, der in die Map gesetzt werden soll
+	 */
+	public void putFirst(String key, Object value) {
+		LinkedHashMap<String, Object> copiedMap = new LinkedHashMap<>(map);
+		map.clear();
+		map.put(key, value);
+		map.putAll(copiedMap);
+	}
+	/**
 	 * Gibt das zu einem key dazugehörige Objekt aus der Map zurück, falls es existiert.
 	 * @param key Der key, dessen dazugehöriges Objekt zurückgegeben werden soll
 	 * @return Das Objekt, dass zu dem angegebenen key dazugehörig ist
