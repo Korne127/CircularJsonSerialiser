@@ -363,6 +363,9 @@ public class Serialiser {
 						return linkedObject;
 					}
 					int hash = Integer.parseInt(string.substring(1));
+					if (hashTable.containsKey(hash)) {
+						return hashTable.get(hash);
+					}
 					Object linkedObject = getLinkedObject(multiFile ? wholeSeperatedJson : wholeSingleJson, hash);
 					if (linkedObject == null) {
 						throw new DeserialiseException("The definition of the linked object " +
