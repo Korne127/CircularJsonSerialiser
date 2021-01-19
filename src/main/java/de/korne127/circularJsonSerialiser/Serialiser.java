@@ -556,8 +556,7 @@ public class Serialiser {
 			}
 
 			if (!newClass.isArray()) {
-				Object newObject = getNewInstance(newClass);
-				if (newObject instanceof Map) {
+				if (Map.class.isAssignableFrom(newClass)) {
 					for (Object jsonArrayPart : jsonArray.skipFirst()) {
 						JSONObject mapPart = (JSONObject) jsonArrayPart;
 						Object keyPart = getLinkedObject(mapPart.get("key"), searchedHash);
@@ -571,6 +570,13 @@ public class Serialiser {
 					}
 					return null;
 				}
+				for (Object jsonArrayPart : jsonArray.skipFirst()) {
+					Object collectionChild = getLinkedObject(jsonArrayPart, searchedHash);
+					if (collectionChild != null) {
+						return collectionChild;
+					}
+				}
+				return null;
 			}
 			for (Object jsonArrayPart : jsonArray.skipFirst()) {
 				Object arrayPart = getLinkedObject(jsonArrayPart, searchedHash);
