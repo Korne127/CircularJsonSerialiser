@@ -181,6 +181,9 @@ public class Serialiser {
 			}
 			return object;
 		}
+		if (objectClass.isEnum()) {
+			return "#" + objectClass.getName() + "=" + object.toString();
+		}
 
 		int objectHash = System.identityHashCode(object);
 		if (hashTable.containsKey(objectHash)) {
@@ -442,6 +445,16 @@ public class Serialiser {
 									", value: " + classValue + " could not be deserialised.");
 						}
 						return result;
+					}
+					Class<?> objectClass;
+					try {
+						objectClass = Class.forName(className);
+					} catch (ClassNotFoundException e) {
+						throw new DeserialiseException("The specified class " + className + ", used by " +
+								getCurrentFieldInformation(className) + " could not be found.", e);
+					}
+					if (objectClass.isEnum()) {
+						return getNewEnumInstance(classValue, objectClass);
 					}
 					throw new DeserialiseException("The definition of the special class " + className +
 							", used by " + getCurrentFieldInformation(className) + " could not be found.");
@@ -790,6 +803,18 @@ public class Serialiser {
 		throw new DeserialiseException("Class " + objectClass + ", used by " +
 				getCurrentFieldInformation(objectClass.getName()) +
 				" could not be instantiated and no alternative class could be found.", cause);
+	}
+
+	/**
+	 * Hilfsmethode:<br>
+	 * Gibt eine neue Instanz des angegebenen Enums mit dem angegebenen Wert zurück
+	 * @param name Der Wert des Enums, der zurückgegeben werden soll
+	 * @param type Die Enumklasse
+	 * @return Eine neue Instanz des angegebenen Enums mit dem angegebenen Wert
+	 */
+	@SuppressWarnings("unchecked")
+	private <T extends Enum<T>> T getNewEnumInstance(String name, Class<?> type) {
+		return Enum.valueOf((Class<T>) type, name);
 	}
 
 	/**
