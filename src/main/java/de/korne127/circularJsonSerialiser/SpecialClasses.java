@@ -2,13 +2,20 @@ package de.korne127.circularJsonSerialiser;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.LocalTime;
 import java.time.ZonedDateTime;
+import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.Map;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.SimpleTimeZone;
+import java.util.TimeZone;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -52,6 +59,47 @@ enum SpecialClasses {
 				return zonedDateTime.format(DateTimeFormatter.ISO_ZONED_DATE_TIME);
 			},
 			ZonedDateTime::parse),
+
+
+	//Alte Datumsklassen
+	DATE(Date.class,
+			object -> {
+				Date date = (Date) object;
+				return new SimpleDateFormat("yyyy-MM-dd hh:mm:ss").format(date);
+			},
+			string -> {
+				try {
+					return new SimpleDateFormat("yyyy-MM-dd hh:mm:ss").parse(string);
+				} catch (ParseException e) {
+					return null;
+				}
+			}),
+	GREGORIAN_CALENDAR(GregorianCalendar.class,
+			object -> {
+				GregorianCalendar gregorianCalendar = (GregorianCalendar) object;
+				DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+				TimeZone timeZone = gregorianCalendar.getTimeZone();
+				return dateFormat.format(gregorianCalendar.getTime()) + "|" +
+						timeZone.getRawOffset() + "|" + timeZone.getID();
+			},
+			string -> {
+				String[] calendarInfos = string.split("\\|");
+				Date date;
+				try {
+					date = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss").parse(calendarInfos[0]);
+				} catch (ParseException e) {
+					return null;
+				}
+				TimeZone timezone = new SimpleTimeZone(Integer.parseInt(calendarInfos[1]), calendarInfos[2]);
+				GregorianCalendar gregorianCalendar = new GregorianCalendar(timezone);
+				gregorianCalendar.setTime(date);
+				return gregorianCalendar;
+			}),
+
+	//Anderes
+	UUID(java.util.UUID.class,
+			Object::toString,
+			java.util.UUID::fromString),
 
 
 	//Unterklassen von Number
