@@ -60,8 +60,44 @@ public class Serialiser {
 	private JSONObject wholeSingleJson;
 	private boolean multiFile;
 
-	private final boolean autoConvertCollections;
+	private final CollectionHandling collectionHandling;
 
+	/**
+	 * Enum, das die verschiedenen Optionen, wie sich der Serialiser verhalten soll, wenn
+	 * keine Instanz einer Collection oder Map erstellt werden kann.<br>
+	 * Siehe {@link #NO_WARNING}, {@link #CONVERT_WITH_WARNING}, {@link #DEBUG_MODE}, {@link #NO_CASTING}.
+	 */
+	public enum CollectionHandling {
+		/**
+		 * Falls keine Instanz einer Collection/Map erstellt werden kann, wird eine andere, möglichst
+		 * ähnliche Collection/Map Klasse genommen, in der die Elemente gespeichert werden.
+		 */
+		NO_WARNING,
+		/**
+		 * Der Standard-Modus<br>
+		 * Falls keine Instanz einer Collection/Map erstellt werden kann, wird eine andere, möglichst
+		 * ähnliche Collection/Map Klasse genommen, in der die Elemente gespeichert werden.<br>
+		 * Zusätzlich wird eine Warnung, welche Klasse in welche Klasse umgewandlt wurde, ausgegeben.
+		 */
+		CONVERT_WITH_WARNING,
+		/**
+		 * Falls keine Instanz einer Collection/Map erstellt werden kann, wird eine andere, möglichst
+		 * ähnliche Collection/Map Klasse genommen, in der die Elemente gespeichert werden.<br>
+		 * Zusätzlich wird die komplette Exception, die gecatcht wurde, sowie eine Warnung, welche Klasse
+		 * in welche Klasse umgewandelt wurde, ausgegeben.
+		 */
+		DEBUG_MODE,
+		/**
+		 * Falls keine Instanz einer Collection/Map erstellt werden kann, wird eine
+		 * {@link DeserialiseException} geworfen und der Programmablauf unterbrochen.
+		 */
+		NO_CASTING
+	}
+
+	/**
+	 * Enum über den Feldtyp des Feldes, welches aktuell serialisiert wird.<br>
+	 * Es wird nur verwendet, falls eine Fehlermeldung auftritt um das aktuelle Feld besser anzugeben.
+	 */
 	private enum FieldType {
 		FIELD,
 		ARRAY,
@@ -72,25 +108,22 @@ public class Serialiser {
 	/**
 	 * Der standardmäßige Konstruktor der Serialiser-Klasse:<br>
 	 * Erstellt einen neuen Serialiser.<br>
-	 * Ruft intern {@link #Serialiser(boolean) Serialiser(true)} auf.
+	 * Setzt dabei den Modus, wie Collections behandelt werden auf
+	 * {@link CollectionHandling#CONVERT_WITH_WARNING CONVERT_WITH_WARNING}.
 	 */
 	public Serialiser() {
-		this(true);
+		this(CollectionHandling.CONVERT_WITH_WARNING);
 	}
 
 	/**
 	 * Ein Konstruktor der Serialiser-Klasse:<br>
-	 * Erstellt einen neuen Serialiser und stellt ein, ob wenn eine Collection oder Map nicht deserialisiert
-	 * werden konnte, automatisch versucht werden soll, einen andere passende Collection/Map-Klasse zu benutzen,
-	 * oder ob eine Exception geworfen werden soll
-	 * @param autoConvertCollections true - Falls eine Collection oder Map nicht deserialisiert werden kann,
-	 *                               soll versucht werden, eine andere passende Collection/Map-Klasse zu
-	 *                               benutzen;<br>
-	 *                               false - Falls eine Collection oder Map nicht deserialisiert werden kann,
-	 *                               soll eine {@link DeserialiseException} geworfen werden.
+	 * Erstellt einen neuen Serialiser und setzt den Modus, wie Collections behandelt werden auf den
+	 * angegebenen Modus.
+	 * @param collectionHandling Der angegebene Modus, wie sich der Serialiser verhalten soll, wenn keine
+	 *                           Instanz einer Collection oder Map erstellt werden kann
 	 */
-	public Serialiser(boolean autoConvertCollections) {
-		this.autoConvertCollections = autoConvertCollections;
+	public Serialiser(CollectionHandling collectionHandling) {
+		this.collectionHandling = collectionHandling;
 	}
 
 	/**
@@ -499,19 +532,27 @@ public class Serialiser {
 				return newArray;
 			}
 			Object newObject;
-			if (autoConvertCollections) {
+			if (collectionHandling == CollectionHandling.NO_CASTING) {
+				newObject = getNewInstance(newClass);
+			} else {
 				try {
 					newObject = getNewInstance(newClass);
 				} catch (DeserialiseException e) {
 					newObject = getNewAlternativeInstance(newClass, e);
-					e.printStackTrace();
-					System.err.println("WARNING: Class " + newClass +
-							" has been converted to class " + newObject.getClass() +
-							".\nThis might lead to a ClassCastException!\nIt is recommended not to use " +
-							"this Collection or Map type (" + newClass + ")!");
+					if (collectionHandling == CollectionHandling.DEBUG_MODE) {
+						e.printStackTrace();
+					}
+					if (collectionHandling != CollectionHandling.NO_WARNING) {
+						System.out.println("WARNING: Class " + newClass.getName() +
+								" has been converted to class " + newObject.getClass().getName() +
+								". This might lead to a ClassCastException.\nIt is recommended not to use " +
+								"this Collection or Map type (" + newClass.getName() + ")!");
+					}
+					if (collectionHandling == CollectionHandling.CONVERT_WITH_WARNING) {
+						System.out.println("This warning can be suppressed by using the NO_WARNING mode " +
+								"in the constructor of the serialiser.");
+					}
 				}
-			} else {
-				newObject = getNewInstance(newClass);
 			}
 			if (newObject instanceof Collection) {
 				currentFieldType = FieldType.COLLECTION;
