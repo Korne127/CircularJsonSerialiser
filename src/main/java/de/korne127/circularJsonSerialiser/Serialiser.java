@@ -6,6 +6,7 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
@@ -300,6 +301,9 @@ public class Serialiser {
 				if (objectField.isAnnotationPresent(SerialiseIgnore.class)) {
 					continue;
 				}
+				if (isStaticFinal(objectField)) {
+					continue;
+				}
 				currentField = objectField;
 				currentFieldType = FieldType.FIELD;
 				Object child;
@@ -557,6 +561,9 @@ public class Serialiser {
 			for (Field field : newClass.getDeclaredFields()) {
 				field.setAccessible(true);
 				if (field.isAnnotationPresent(SerialiseIgnore.class)) {
+					continue;
+				}
+				if (isStaticFinal(field)) {
 					continue;
 				}
 				currentField = field;
@@ -891,6 +898,18 @@ public class Serialiser {
 			newObject.put(String.valueOf(childHash), childObject);
 			wholeSeperatedJson.put(fileName, newObject);
 		}
+	}
+
+	/**
+	 * Hilfsmethode:<br>
+	 * Testet, ob ein bestimmtes Feld static und final ist
+	 * @param field Das Feld, welches getestet werden soll
+	 * @return true - das Feld ist static und final;<br>
+	 *     false - das Feld ist nicht static und final
+	 */
+	private static boolean isStaticFinal(Field field) {
+		int modifiers = field.getModifiers();
+		return (Modifier.isStatic(modifiers) && Modifier.isFinal(modifiers));
 	}
 
 	/**
