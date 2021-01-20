@@ -18,7 +18,7 @@ import java.lang.annotation.Target;
  * Effekt und wird nicht beachtet.
  * @author Korne127
  */
-@Target(ElementType.TYPE)
+@Target({ElementType.TYPE, ElementType.FIELD})
 @Retention(RetentionPolicy.RUNTIME)
 @Inherited
 @Documented

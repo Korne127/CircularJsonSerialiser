@@ -94,7 +94,7 @@ public class Serialiser {
 
 	/**
 	 * Konvertiert das angegebene Objekt zu einem JSON-Objekt, welches als String zurückgegeben wird.<br>
-	 * Für Implementierungsdetails, siehe {@link #objectToJson(Object object)}.
+	 * Für Implementierungsdetails, siehe {@link #objectToJson(Object object, String parentFileName)}.
 	 * @param object Das Objekt, welches zu einem JSON-Objekt konvertiert werden soll
 	 * @return Das aus dem angegebenen Objekt kodierte JSON-Objekt
 	 * @throws SerialiseException Wird geworfen, falls ein Fehler beim Serialisieren des Objektes
@@ -106,14 +106,14 @@ public class Serialiser {
 		currentFieldType = null;
 		multiFile = false;
 
-		return objectToJson(object).toString();
+		return objectToJson(object, null).toString();
 	}
 
 	/**
 	 * Konvertiert das angegebene Objekt zu mehreren JSON-Objekten, welche in Dateien unterteilt als Strings
 	 * in einer Map zurückgegeben werden. Dabei bestimmen die SerialiseFile Annotations an einer Klasse in
 	 * welcher Datei ein Objekt der Klasse zurückgegeben wird.<br>
-	 * Für Implementierungsdetails, siehe {@link #objectToJson(Object object)}.
+	 * Für Implementierungsdetails, siehe {@link #objectToJson(Object object, String parentFileName)}.
 	 * @param object Das Objekt, welches zu JSON-Objekten konvertiert werden soll
 	 * @return Die aus dem angegebenen Objekt kodierten JSON-Objekte in einer Map zum Dateinamen zugeordnet
 	 * @throws SerialiseException Wird geworfen, falls ein Fehler beim Serialisen des Objektes
@@ -126,8 +126,13 @@ public class Serialiser {
 		wholeSeperatedJson = new HashMap<>();
 		multiFile = true;
 
-		Object mainObject = objectToJson(object);
-		String mainFileName = getFileName(object.getClass());
+		String mainFileName = getFileName(object);
+		if (mainFileName == null) {
+			mainFileName = "Standard";
+		}
+
+		Object mainObject = objectToJson(object, mainFileName);
+
 		if (wholeSeperatedJson.containsKey(mainFileName)) {
 			wholeSeperatedJson.get(mainFileName).put("Main", mainObject);
 		} else {
@@ -161,7 +166,7 @@ public class Serialiser {
 	 * @return Das aus dem angegebenen Objekt kodierte für JSON benutzbare Objekt
 	 * @throws SerialiseException Wird geworfen, falls ein Fehler beim Serialisieren des Objektes auftritt.
 	 */
-	private Object objectToJson(Object object) throws SerialiseException {
+	private Object objectToJson(Object object, String parentFileName) throws SerialiseException {
 		if (object == null) {
 			return null;
 		}
@@ -193,7 +198,20 @@ public class Serialiser {
 				objectArray = (Object[]) object;
 			}
 			for (Object objectArrayChild : objectArray) {
-				array.put(objectToJson(objectArrayChild));
+				String childFileName = getFileName(object);
+				if (multiFile && parentFileName.equals(childFileName)) {
+					childFileName = null;
+				}
+				Object childJson = objectToJson(objectArrayChild,
+						childFileName == null ? parentFileName : childFileName);
+				if (!multiFile || childJson == null || childFileName == null ||
+						isSimpleType(childJson.getClass())) {
+					array.put(childJson);
+				} else {
+					int childHash = System.identityHashCode(objectArrayChild);
+					array.put("@" + childFileName + "#" + childHash);
+					putInWholeSeparatedJson(childFileName, childHash, childJson);
+				}
 			}
 			return array;
 		}
@@ -203,7 +221,20 @@ public class Serialiser {
 			collection.put(objectClass.getName() + "=" + objectHash);
 			Collection<?> objectCollection = (Collection<?>) object;
 			for (Object objectCollectionChild : objectCollection) {
-				collection.put(objectToJson(objectCollectionChild));
+				String childFileName = getFileName(objectCollectionChild);
+				if (multiFile && parentFileName.equals(childFileName)) {
+					childFileName = null;
+				}
+				Object childJson = objectToJson(objectCollectionChild,
+						childFileName == null ? parentFileName : childFileName);
+				if (!multiFile || childJson == null || childFileName == null ||
+						isSimpleType(childJson.getClass())) {
+					collection.put(childJson);
+				} else {
+					int childHash = System.identityHashCode(objectCollectionChild);
+					collection.put("@" + childFileName + "#" + childHash);
+					putInWholeSeparatedJson(childFileName, childHash, childJson);
+				}
 			}
 			return collection;
 		}
@@ -215,8 +246,36 @@ public class Serialiser {
 			for (Object objectMapKey : objectMap.keySet()) {
 				Object objectMapValue = objectMap.get(objectMapKey);
 				JSONObject mapChild = new JSONObject();
-				mapChild.put("key", objectToJson(objectMapKey));
-				mapChild.put("value", objectToJson(objectMapValue));
+
+				String keyFileName = getFileName(objectMapKey);
+				if (multiFile && parentFileName.equals(keyFileName)) {
+					keyFileName = null;
+				}
+				Object mapKeyJson = objectToJson(objectMapKey,
+						keyFileName == null ? parentFileName : keyFileName);
+				if (!multiFile || mapKeyJson == null || keyFileName == null ||
+						isSimpleType(mapKeyJson.getClass())) {
+					mapChild.put("key", mapKeyJson);
+				} else {
+					int childHash = System.identityHashCode(objectMapKey);
+					mapChild.put("key", "@" + keyFileName + "#" + childHash);
+					putInWholeSeparatedJson(keyFileName, childHash, mapKeyJson);
+				}
+
+				String valueFileName = getFileName(objectMapValue);
+				if (multiFile && parentFileName.equals(valueFileName)) {
+					valueFileName = null;
+				}
+				Object mapValueJson = objectToJson(objectMapValue,
+						valueFileName == null ? parentFileName : valueFileName);
+				if (!multiFile || mapValueJson == null || valueFileName == null ||
+						isSimpleType(mapValueJson.getClass())) {
+					mapChild.put("value", mapValueJson);
+				} else {
+					int childHash = System.identityHashCode(objectMapValue);
+					mapChild.put("value", "@" + valueFileName + "#" + childHash);
+					putInWholeSeparatedJson(valueFileName, childHash, mapValueJson);
+				}
 				map.put(mapChild);
 			}
 			return map;
@@ -248,21 +307,18 @@ public class Serialiser {
 							getCurrentFieldInformation(objectField.getType().getName()) +
 							" could not be retrieved", e);
 				}
-				String fileName = getFileName(objectField.getType());
-				Object childObject = objectToJson(child);
-				if (!multiFile || childObject == null || isSimpleType(childObject.getClass()) ||
-						fileName.equals(getFileName(objectField.getDeclaringClass()))) {
-					jsonObject.put(objectField.getName(), childObject);
+				String currentFileName = getFileName(objectField, child);
+				if (multiFile && parentFileName.equals(currentFileName)) {
+					currentFileName = null;
+				}
+				Object childJson = objectToJson(child, currentFileName == null ? parentFileName : currentFileName);
+				if (!multiFile || childJson == null || currentFileName == null ||
+						isSimpleType(childJson.getClass())) {
+					jsonObject.put(objectField.getName(), childJson);
 				} else {
 					int childHash = System.identityHashCode(child);
-					jsonObject.put(objectField.getName(), "@" + fileName + "#" + childHash);
-					if (wholeSeperatedJson.containsKey(fileName)) {
-						wholeSeperatedJson.get(fileName).put(String.valueOf(childHash), childObject);
-					} else {
-						JSONObject newObject = new JSONObject();
-						newObject.put(String.valueOf(childHash), childObject);
-						wholeSeperatedJson.put(fileName, newObject);
-					}
+					jsonObject.put(objectField.getName(), "@" + currentFileName + "#" + childHash);
+					putInWholeSeparatedJson(currentFileName, childHash, childJson);
 				}
 			}
 			objectClass = objectClass.getSuperclass();
@@ -738,16 +794,36 @@ public class Serialiser {
 
 	/**
 	 * Hilfsmethode:<br>
-	 * Gibt den Namen der Datei zurück, in die eine Instanz der angegebenen Klasse gespeichert werden soll
-	 * @param fieldClass Die angegebene Klasse
-	 * @return Der Name der Datei, in die eine Instanz der angegebenen Klasse gespeichert werden soll
+	 * Gibt den Namen der Datei zurück, in die das angegebene Objekt serialisiert werden soll
+	 * @param field Das Feld, in dem das angegebene Objekt gespeichert ist
+	 * @param object Das angegebene Objekt
+	 * @return Der Name der Datei, in die das angegebene Objekt serialisiert werden soll
 	 */
-	private String getFileName(Class<?> fieldClass) {
-		String fileName = "Standard";
-		if (fieldClass.isAnnotationPresent(SerialiseFile.class)) {
-			fileName = fieldClass.getDeclaredAnnotation(SerialiseFile.class).value();
+	private String getFileName(Field field, Object object) {
+		if (field.isAnnotationPresent(SerialiseFile.class)) {
+			return field.getDeclaredAnnotation(SerialiseFile.class).value();
 		}
-		return fileName;
+		return getFileName(object);
+	}
+
+	/**
+	 * Hilfsmethode:<br>
+	 * Gibt den Namen der Datei zurück, in die das angegebene Objekt serialisiert werden soll
+	 * @param object Das angegebene Objekt
+	 * @return Der Name der Datei, in die das angegebene Objekt serialisiert werden soll
+	 */
+	private String getFileName(Object object) {
+		if (object == null) {
+			return null;
+		}
+		Class<?> objectClass = object.getClass();
+		while (objectClass.isArray()) {
+			objectClass = objectClass.getComponentType();
+		}
+		if (objectClass.isAnnotationPresent(SerialiseFile.class)) {
+			return objectClass.getDeclaredAnnotation(SerialiseFile.class).value();
+		}
+		return null;
 	}
 
 	/**
@@ -773,6 +849,23 @@ public class Serialiser {
 		}
 		return message + currentField.getDeclaringClass().getName() + "#" + currentField.getName() +
 				" (type: " + currentType + ")";
+	}
+
+	/**
+	 * Hilfsmethode:<br>
+	 * Setzt ein bestimmtes Objekt mit einem bestimmten Hash in das wholeSeparatedJson-Objekt.
+	 * @param fileName Der Name der Datei, in die Das Objekt gesetzt werden soll
+	 * @param childHash Der Hash des Objektes, unter dem er gespeichert werden soll
+	 * @param childObject Das Objekt, welches gespeichert werden soll
+	 */
+	private void putInWholeSeparatedJson(String fileName, int childHash, Object childObject) {
+		if (wholeSeperatedJson.containsKey(fileName)) {
+			wholeSeperatedJson.get(fileName).put(String.valueOf(childHash), childObject);
+		} else {
+			JSONObject newObject = new JSONObject();
+			newObject.put(String.valueOf(childHash), childObject);
+			wholeSeperatedJson.put(fileName, newObject);
+		}
 	}
 
 	/**
