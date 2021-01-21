@@ -212,7 +212,7 @@ class JSONReader {
 
 	/**
 	 * Transformiert einen bestimmten String mit der angegebenen Position, an der die
-	 * Kodierung eines primitiven Typens startet in den primitiven Datentypen.
+	 * Kodierung eines primitiven Typen startet in den primitiven Datentypen.
 	 * @param content Der String, in dem sich der primitive Datentyp befindet
 	 * @param iteratorStart Die Position im String, an der der primitive Datentyp beginnt
 	 * @return Ein JSONResult, welches aus dem primitiven Datentypen, welches aus der Kodierung

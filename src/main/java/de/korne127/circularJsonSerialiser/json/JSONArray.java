@@ -73,7 +73,7 @@ public class JSONArray implements JSONElement {
 	}
 
 	/**
-	 * Gibt die Anzahl der Objekte in der Liste zurück
+	 * Gibt die Anzahl der Objekte in der Liste zurück.
 	 * @return Die Anzahl der Objekte in der Liste
 	 */
 	public int length() {

@@ -2,7 +2,7 @@ package de.korne127.circularJsonSerialiser.exceptions;
 
 /**
  * DeserialiseException:<br>
- * Wird geworfen, wenn ein Fehler beim Deserialisen des Objektes aufgetreten ist.
+ * Wird geworfen, wenn ein Fehler beim Deserialisieren des Objektes aufgetreten ist.
  * @author Korne127
  */
 public class DeserialiseException extends Exception {

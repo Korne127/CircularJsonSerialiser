@@ -133,9 +133,9 @@ enum SpecialClasses {
 
 	/**
 	 * Konstruktor für das Enum:<br>
-	 * Jedes Element speichert die Klasse, die gesondert behandelt werden soll, eine Serialisierungs-
-	 * Funktion, die eine Instanz der Klasse in einen String umwandelt sowie eine Deserialisierungs-
-	 * Funktion, die einen solchen String zurück in eine Instanz der Klasse umwandelt.
+	 * Jedes Element speichert die Klasse, die gesondert behandelt werden soll, eine
+	 * Serialisierungs-Funktion, die eine Instanz der Klasse in einen String umwandelt sowie eine
+	 * Deserialisierungs-Funktion, die einen solchen String zurück in eine Instanz der Klasse umwandelt.
 	 * @param specialClass Die Klasse, die gesondert behandelt werden soll
 	 * @param classSerialiser Die Serialisierungs-Funktion, die eine Instanz der Klasse in einen String
 	 *                        umwandelt

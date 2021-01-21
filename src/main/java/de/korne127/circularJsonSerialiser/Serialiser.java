@@ -56,7 +56,7 @@ public class Serialiser {
 	private Field currentField;
 	private FieldType currentFieldType;
 
-	private Map<String, JSONObject> wholeSeperatedJson;
+	private Map<String, JSONObject> wholeSeparatedJson;
 	private JSONObject wholeSingleJson;
 	private boolean multiFile;
 
@@ -77,13 +77,13 @@ public class Serialiser {
 		 * Der Standard-Modus<br>
 		 * Falls keine Instanz einer Collection/Map erstellt werden kann, wird eine andere, möglichst
 		 * ähnliche Collection/Map Klasse genommen, in der die Elemente gespeichert werden.<br>
-		 * Zusätzlich wird eine Warnung, welche Klasse in welche Klasse umgewandlt wurde, ausgegeben.
+		 * Zusätzlich wird eine Warnung, welche Klasse in welche Klasse umgewandelt wurde, ausgegeben.
 		 */
 		CONVERT_WITH_WARNING,
 		/**
 		 * Falls keine Instanz einer Collection/Map erstellt werden kann, wird eine andere, möglichst
 		 * ähnliche Collection/Map Klasse genommen, in der die Elemente gespeichert werden.<br>
-		 * Zusätzlich wird die komplette Exception, die gecatcht wurde, sowie eine Warnung, welche Klasse
+		 * Zusätzlich wird die komplette Exception, die gefangen wurde, sowie eine Warnung, welche Klasse
 		 * in welche Klasse umgewandelt wurde, ausgegeben.
 		 */
 		DEBUG_MODE,
@@ -150,14 +150,14 @@ public class Serialiser {
 	 * Für Implementierungsdetails, siehe {@link #objectToJson(Object object, String parentFileName)}.
 	 * @param object Das Objekt, welches zu JSON-Objekten konvertiert werden soll
 	 * @return Die aus dem angegebenen Objekt kodierten JSON-Objekte in einer Map zum Dateinamen zugeordnet
-	 * @throws SerialiseException Wird geworfen, falls ein Fehler beim Serialisen des Objektes
+	 * @throws SerialiseException Wird geworfen, falls ein Fehler beim Serialisieren des Objektes
 	 * aufgetreten ist.
 	 */
 	public Map<String, String> serialiseObjectSeparated(Object object) throws SerialiseException {
 		hashTable = new HashMap<>();
 		currentField = null;
 		currentFieldType = null;
-		wholeSeperatedJson = new HashMap<>();
+		wholeSeparatedJson = new HashMap<>();
 		multiFile = true;
 
 		String mainFileName = getFileName(object);
@@ -167,17 +167,17 @@ public class Serialiser {
 
 		Object mainObject = objectToJson(object, mainFileName);
 
-		if (wholeSeperatedJson.containsKey(mainFileName)) {
-			wholeSeperatedJson.get(mainFileName).put("Main", mainObject);
+		if (wholeSeparatedJson.containsKey(mainFileName)) {
+			wholeSeparatedJson.get(mainFileName).put("Main", mainObject);
 		} else {
 			JSONObject newObject = new JSONObject();
 			newObject.putFirst("Main", mainObject);
-			wholeSeperatedJson.put(mainFileName, newObject);
+			wholeSeparatedJson.put(mainFileName, newObject);
 		}
 
 		Map<String, String> resultMap = new HashMap<>();
-		for (String key : wholeSeperatedJson.keySet()) {
-			resultMap.put(key, wholeSeperatedJson.get(key).toString());
+		for (String key : wholeSeparatedJson.keySet()) {
+			resultMap.put(key, wholeSeparatedJson.get(key).toString());
 		}
 		return resultMap;
 	}
@@ -402,15 +402,15 @@ public class Serialiser {
 		hashTable = new HashMap<>();
 		currentField = null;
 		currentFieldType = null;
-		wholeSeperatedJson = new HashMap<>();
+		wholeSeparatedJson = new HashMap<>();
 		for (String key : content.keySet()) {
-			wholeSeperatedJson.put(key, new JSONObject(content.get(key)));
+			wholeSeparatedJson.put(key, new JSONObject(content.get(key)));
 		}
 		multiFile = true;
 
-		for (String key : wholeSeperatedJson.keySet()) {
-			if (wholeSeperatedJson.get(key).containsKey("Main")) {
-				return jsonToObject(wholeSeperatedJson.get(key).get("Main"));
+		for (String key : wholeSeparatedJson.keySet()) {
+			if (wholeSeparatedJson.get(key).containsKey("Main")) {
+				return jsonToObject(wholeSeparatedJson.get(key).get("Main"));
 			}
 		}
 		throw new DeserialiseException("The main object to deserialise could not be found.");
@@ -462,7 +462,7 @@ public class Serialiser {
 					if (hashTable.containsKey(hash)) {
 						return hashTable.get(hash);
 					}
-					Object linkedObject = getLinkedObject(multiFile ? wholeSeperatedJson : wholeSingleJson, hash);
+					Object linkedObject = getLinkedObject(multiFile ? wholeSeparatedJson : wholeSingleJson, hash);
 					if (linkedObject == null) {
 						throw new DeserialiseException("The definition of the linked object " +
 								string + "(" + getCurrentFieldInformation(null) +
@@ -572,8 +572,8 @@ public class Serialiser {
 				for (Object jsonArrayPart : jsonArray.skipFirst()) {
 					JSONObject jsonArrayChild = (JSONObject) jsonArrayPart;
 					Object childKey = jsonToObject(jsonArrayChild.get("key"));
-					Object chilValue = jsonToObject(jsonArrayChild.get("value"));
-					newMap.put(childKey, chilValue);
+					Object childValue = jsonToObject(jsonArrayChild.get("value"));
+					newMap.put(childKey, childValue);
 				}
 				return newMap;
 			}
@@ -640,7 +640,7 @@ public class Serialiser {
 	 * Objekt findet.<br>
 	 * Falls das angegebene Objekt die globale Json Map ist, wird diese Methode für jedes Objekt in jeder
 	 * Datei dieser Map aufgerufen und null zurückgegeben, falls kein Aufruf das Objekt findet.<br>
-	 * Ansonsten wird diese Methode für jedes Feld des Objektes aufgerufen und null zurückgegeben, fassl kein
+	 * Ansonsten wird diese Methode für jedes Feld des Objektes aufgerufen und null zurückgegeben, falls kein
 	 * Aufruf das Objekt findet.
 	 * @param json Das für Json benutzbare Objekt, welches nach dem Objekt mit dem angegebenen Hash durchsucht
 	 *             werden soll
@@ -738,13 +738,13 @@ public class Serialiser {
 	 * wurde, ansonsten null.
 	 * @param fileName Der Name der Datei, in der gesucht werden soll
 	 * @param searchedHash Der Hash des Objektes, das zurückgegeben werden soll
-	 * @return Das Objekt mit dem angegebenen Hash in der angegebenen Datek, falls es dort gespeichert
+	 * @return Das Objekt mit dem angegebenen Hash in der angegebenen Datei, falls es dort gespeichert
 	 * wurde, ansonsten null
 	 * @throws DeserialiseException Wird geworfen, falls ein Fehler aufgetreten ist, während das verlinkte
 	 * Objekt gesucht wurde
 	 */
 	private Object getLinkedFileObject(String fileName, int searchedHash) throws DeserialiseException {
-		JSONObject value = wholeSeperatedJson.get(fileName);
+		JSONObject value = wholeSeparatedJson.get(fileName);
 		if (value.containsKey(String.valueOf(searchedHash))) {
 			return jsonToObject(value.get(String.valueOf(searchedHash)));
 		}
@@ -857,7 +857,7 @@ public class Serialiser {
 	 * Hilfsmethode:<br>
 	 * Gibt eine neue Instanz des angegebenen Enums mit dem angegebenen Wert zurück
 	 * @param name Der Wert des Enums, der zurückgegeben werden soll
-	 * @param type Die Enumklasse
+	 * @param type Die Enum-Klasse
 	 * @return Eine neue Instanz des angegebenen Enums mit dem angegebenen Wert
 	 */
 	@SuppressWarnings("unchecked")
@@ -932,12 +932,12 @@ public class Serialiser {
 	 * @param childObject Das Objekt, welches gespeichert werden soll
 	 */
 	private void putInWholeSeparatedJson(String fileName, int childHash, Object childObject) {
-		if (wholeSeperatedJson.containsKey(fileName)) {
-			wholeSeperatedJson.get(fileName).put(String.valueOf(childHash), childObject);
+		if (wholeSeparatedJson.containsKey(fileName)) {
+			wholeSeparatedJson.get(fileName).put(String.valueOf(childHash), childObject);
 		} else {
 			JSONObject newObject = new JSONObject();
 			newObject.put(String.valueOf(childHash), childObject);
-			wholeSeperatedJson.put(fileName, newObject);
+			wholeSeparatedJson.put(fileName, newObject);
 		}
 	}
 
