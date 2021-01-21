@@ -8,6 +8,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
@@ -224,57 +225,43 @@ public class Serialiser {
 			return "@" + objectHash;
 		}
 		hashTable.put(objectHash, object);
-		if (objectClass.isArray()) {
-			currentFieldType = FieldType.ARRAY;
-			JSONArray array = new JSONArray();
-			array.put(objectClass.getName() + "=" + objectHash);
-			Object[] objectArray;
-			if (objectClass.getComponentType().isPrimitive()) {
-				objectArray = convertPrimitiveToArray(object);
+
+		if (objectClass.isArray() || object instanceof Collection) {
+			Iterable<?> objectIterable;
+			if (objectClass.isArray()) {
+				currentFieldType = FieldType.ARRAY;
+				Object[] objectArray;
+				if (objectClass.getComponentType().isPrimitive()) {
+					objectArray = convertPrimitiveToArray(object);
+				} else {
+					objectArray = (Object[]) object;
+				}
+				objectIterable = Arrays.asList(objectArray);
 			} else {
-				objectArray = (Object[]) object;
+				currentFieldType = FieldType.COLLECTION;
+				objectIterable = (Collection<?>) object;
 			}
-			for (Object objectArrayChild : objectArray) {
-				String childFileName = getFileName(object);
+			JSONArray jsonChild = new JSONArray();
+			jsonChild.put(objectClass.getName() + "=" + objectHash);
+			for (Object objectChild : objectIterable) {
+				String childFileName = getFileName(objectChild);
 				if (multiFile && parentFileName.equals(childFileName)) {
 					childFileName = null;
 				}
-				Object childJson = objectToJson(objectArrayChild,
+				Object childJson = objectToJson(objectChild,
 						childFileName == null ? parentFileName : childFileName);
 				if (!multiFile || childJson == null || childFileName == null ||
 						isSimpleType(childJson.getClass())) {
-					array.put(childJson);
+					jsonChild.put(childJson);
 				} else {
-					int childHash = System.identityHashCode(objectArrayChild);
-					array.put("@" + childFileName + "#" + childHash);
+					int childHash = System.identityHashCode(objectChild);
+					jsonChild.put("@" + childFileName + "#" + childHash);
 					putInWholeSeparatedJson(childFileName, childHash, childJson);
 				}
 			}
-			return array;
+			return jsonChild;
 		}
-		if (object instanceof Collection) {
-			currentFieldType = FieldType.COLLECTION;
-			JSONArray collection = new JSONArray();
-			collection.put(objectClass.getName() + "=" + objectHash);
-			Collection<?> objectCollection = (Collection<?>) object;
-			for (Object objectCollectionChild : objectCollection) {
-				String childFileName = getFileName(objectCollectionChild);
-				if (multiFile && parentFileName.equals(childFileName)) {
-					childFileName = null;
-				}
-				Object childJson = objectToJson(objectCollectionChild,
-						childFileName == null ? parentFileName : childFileName);
-				if (!multiFile || childJson == null || childFileName == null ||
-						isSimpleType(childJson.getClass())) {
-					collection.put(childJson);
-				} else {
-					int childHash = System.identityHashCode(objectCollectionChild);
-					collection.put("@" + childFileName + "#" + childHash);
-					putInWholeSeparatedJson(childFileName, childHash, childJson);
-				}
-			}
-			return collection;
-		}
+
 		if (object instanceof Map) {
 			currentFieldType = FieldType.MAP;
 			JSONArray map = new JSONArray();
@@ -503,23 +490,29 @@ public class Serialiser {
 			}
 			return json;
 		}
+		String[] classInfos;
 		if (json instanceof JSONArray) {
 			JSONArray jsonArray = (JSONArray) json;
-			String[] classInfos = jsonArray.getString(0).split("=");
-			String className = classInfos[0];
-			int hash = Integer.parseInt(classInfos[1]);
+			classInfos = jsonArray.getString(0).split("=");
+		} else {
+			JSONObject jsonObject = (JSONObject) json;
+			classInfos = jsonObject.getString("class").split("=");
+		}
+		String className = classInfos[0];
+		int hash = Integer.parseInt(classInfos[1]);
+		if (hashTable.containsKey(hash)) {
+			return hashTable.get(hash);
+		}
+		Class<?> newClass;
+		try {
+			newClass = Class.forName(className);
+		} catch (ClassNotFoundException e) {
+			throw new DeserialiseException("The specified class " + className + ", used by " +
+					getCurrentFieldInformation(className) + " could not be found.", e);
+		}
 
-			if (hashTable.containsKey(hash)) {
-				return hashTable.get(hash);
-			}
-
-			Class<?> newClass;
-			try {
-				newClass = Class.forName(className);
-			} catch (ClassNotFoundException e) {
-				throw new DeserialiseException("The specified class " + className + ", used by " +
-						getCurrentFieldInformation(className) + " could not be found.", e);
-			}
+		if (json instanceof JSONArray) {
+			JSONArray jsonArray = (JSONArray) json;
 			if (newClass.isArray()) {
 				currentFieldType = FieldType.ARRAY;
 				Object newArray = Array.newInstance(newClass.getComponentType(), jsonArray.length() - 1);
@@ -577,24 +570,12 @@ public class Serialiser {
 				}
 				return newMap;
 			}
-		}
-		JSONObject jsonObject = (JSONObject) json;
-
-		String[] classInfos = jsonObject.getString("class").split("=");
-		String className = classInfos[0];
-		int hash = Integer.parseInt(classInfos[1]);
-
-		if (hashTable.containsKey(hash)) {
-			return hashTable.get(hash);
-		}
-
-		Class<?> newClass;
-		try {
-			newClass = Class.forName(className);
-		} catch (ClassNotFoundException e) {
 			throw new DeserialiseException("The specified class " + className + ", used by " +
-					getCurrentFieldInformation(className) + " could not be found.", e);
+					getCurrentFieldInformation(className) + " could not be deserialised as it's neither an " +
+					"array, a collection or a map.");
 		}
+
+		JSONObject jsonObject = (JSONObject) json;
 		Object newObject = getNewInstance(newClass);
 		hashTable.put(hash, newObject);
 

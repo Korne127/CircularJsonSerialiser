@@ -16,9 +16,9 @@ import de.korne127.circularJsonSerialiser.exceptions.JsonParseException;
 class JSONReader {
 
 	/**
-	 * Enum, das den Status des Einlesens eines Arrays im JSON-String repräsentiert
+	 * Enum, das den Status des Einlesens eines JSON-Elementes im JSON-String repräsentiert
 	 */
-	private enum ObjectReadingState {
+	private enum ElementReadingState {
 		BEFORE_KEY,
 		KEY,
 		AFTER_KEY,
@@ -27,53 +27,50 @@ class JSONReader {
 	}
 
 	/**
-	 * Enum, das den Status des Einlesens eines Arrays im JSON-String repräsentiert
-	 */
-	private enum ArrayReadingState {
-		VALUE,
-		AFTER_VALUE
-	}
-
-	/**
 	 * Transformiert einen bestimmten String mit der angegebenen Position, an der die
-	 * Kodierung eines JSON-Objektes startet in das JSON-Objekt
-	 * @param content Der String, in dem sich das kodierte JSON-Objekt befindet
-	 * @param iteratorStart Die Position im String, an der das kodierte JSON-Objekt beginnt
-	 * @return Ein JSONResult, welches aus dem JSON-Objekt, welches aus der Kodierung hergestellt
-	 * wurde sowie der Position im String, an der die Kodierung des JSON-Objektes endet, besteht
-	 * @throws JsonParseException Wird geworfen, falls das JSON-Objekt aus dem JSON-String nicht
+	 * Kodierung eines JSON-Elementes startet in das JSON-Element
+	 * @param content Der String, in dem sich das kodierte JSON-Element befindet
+	 * @param iteratorStart Die Position im String, an der das kodierte JSON-Element beginnt
+	 * @return Ein JSONResult, welches aus dem JSON-Element, welches aus der Kodierung hergestellt
+	 * wurde sowie der Position im String, an der die Kodierung des JSON-Elementes endet, besteht
+	 * @throws JsonParseException Wird geworfen, falls das JSON-Element aus dem JSON-String nicht
 	 * geparst werden konnte.
 	 */
-	static JSONResult readObject(String content, int iteratorStart) throws JsonParseException {
-		if (content.charAt(iteratorStart) != '{') {
-			throw new JsonParseException("Object in JSON-String could not be parsed.");
+	static JSONResult readElement(String content, boolean isObject, int iteratorStart) throws JsonParseException {
+		char startChar = isObject ? '{' : '[';
+		char endChar = isObject ? '}' : ']';
+		String element = isObject ? "Object" : "Array";
+
+		if (content.charAt(iteratorStart) != startChar) {
+			throw new JsonParseException(element + " in JSON-String could not be parsed.");
 		}
 
-		ObjectReadingState state = ObjectReadingState.BEFORE_KEY;
-		StringBuilder key = new StringBuilder();
+		ElementReadingState state = isObject ? ElementReadingState.BEFORE_KEY : ElementReadingState.VALUE;
 		Object value = null;
+		StringBuilder key = new StringBuilder();
 		Map<String, Object> map = new LinkedHashMap<>();
+		List<Object> list = new ArrayList<>();
 
 		for (int characterIterator = iteratorStart + 1; characterIterator < content.length(); characterIterator++) {
 			char character = content.charAt(characterIterator);
 			switch (state) {
 				case BEFORE_KEY:
 					switch (character) {
-						case '\"': state = ObjectReadingState.KEY; break;
+						case '\"': state = ElementReadingState.KEY; break;
 						case ' ': break;
 						default: throw new JsonParseException("Object in JSON-String could not be parsed.");
 					}
 					break;
 				case KEY:
 					if (character == '\"') {
-						state = ObjectReadingState.AFTER_KEY;
+						state = ElementReadingState.AFTER_KEY;
 					} else {
 						key.append(character);
 					}
 					break;
 				case AFTER_KEY:
 					if (character == ':') {
-						state = ObjectReadingState.VALUE;
+						state = ElementReadingState.VALUE;
 					} else if (character != ' ') {
 						throw new JsonParseException("Object in JSON-String could not be parsed.");
 					}
@@ -82,87 +79,45 @@ class JSONReader {
 					JSONResult result;
 					switch (character) {
 						case ' ': continue;
-						case '{': result = readObject(content, characterIterator); break;
-						case '[': result = readArray(content, characterIterator); break;
+						case '{': result = readElement(content, true, characterIterator); break;
+						case '[': result = readElement(content, false, characterIterator); break;
 						case '"': result = readString(content, characterIterator); break;
 						default: result = readBasicType(content, characterIterator); break;
 					}
 					value = result.getValue();
 					characterIterator = result.getEndPosition() - 1;
-					state = ObjectReadingState.AFTER_VALUE;
+					state = ElementReadingState.AFTER_VALUE;
 					break;
 				case AFTER_VALUE:
 					switch (character) {
 						case ' ': break;
 						case ',':
-							map.put(key.toString(), value);
-							key = new StringBuilder();
+							if (isObject) {
+								map.put(key.toString(), value);
+								key = new StringBuilder();
+								state = ElementReadingState.BEFORE_KEY;
+							} else {
+								list.add(value);
+								state = ElementReadingState.VALUE;
+							}
 							value = null;
-							state = ObjectReadingState.BEFORE_KEY;
 							break;
-						case '}':
-							map.put(key.toString(), value);
-							return new JSONResult(new JSONObject(map), characterIterator + 1);
-						default: throw new JsonParseException("Object in JSON-String could not be parsed.");
+						default:
+							if (character == endChar) {
+								if (isObject) {
+									map.put(key.toString(), value);
+									return new JSONResult(new JSONObject(map), characterIterator + 1);
+								} else {
+									list.add(value);
+									return new JSONResult(new JSONArray(list), characterIterator + 1);
+								}
+							}
+							throw new JsonParseException(element + " in JSON-String could not be parsed.");
 					}
 					break;
 			}
 		}
-		throw new JsonParseException("Object in JSON-String could not be parsed.");
-	}
-
-	/**
-	 * Transformiert einen bestimmten String mit der angegebenen Position, an der die
-	 * Kodierung eines JSON-Arrays startet in das JSON-Array
-	 * @param content Der String, in dem sich das kodierte JSON-Array befindet
-	 * @param iteratorStart Die Position im String, an der das kodierte JSON-Array beginnt
-	 * @return Ein JSONResult, welches aus dem JSON-Array, welches aus der Kodierung hergestellt
-	 * wurde sowie der Position im String, an der die Kodierung des JSON-Arrays endet, besteht
-	 * @throws JsonParseException Wird geworfen, falls das JSON-Array aus dem JSON-String nicht
-	 * geparst werden konnte.
-	 */
-	static JSONResult readArray(String content, int iteratorStart) throws JsonParseException {
-		if (content.charAt(iteratorStart) != '[') {
-			throw new JsonParseException("Array in JSON-String could not be parsed.");
-		}
-
-		ArrayReadingState state = ArrayReadingState.VALUE;
-		Object value = null;
-		List<Object> list = new ArrayList<>();
-
-		for (int characterIterator = iteratorStart + 1; characterIterator < content.length(); characterIterator++) {
-			char character = content.charAt(characterIterator);
-			switch (state) {
-				case VALUE:
-					JSONResult result;
-					switch (character) {
-						case ' ': continue;
-						case '{': result = readObject(content, characterIterator); break;
-						case '[': result = readArray(content, characterIterator); break;
-						case '"': result = readString(content, characterIterator); break;
-						default: result = readBasicType(content, characterIterator); break;
-					}
-					value = result.getValue();
-					characterIterator = result.getEndPosition() - 1;
-					state = ArrayReadingState.AFTER_VALUE;
-					break;
-				case AFTER_VALUE:
-					switch (character) {
-						case ' ': break;
-						case ',':
-							list.add(value);
-							value = null;
-							state = ArrayReadingState.VALUE;
-							break;
-						case ']':
-							list.add(value);
-							return new JSONResult(new JSONArray(list), characterIterator + 1);
-						default: throw new JsonParseException("Array in JSON-String could not be parsed.");
-					}
-					break;
-			}
-		}
-		throw new JsonParseException("Array in JSON-String could not be parsed.");
+		throw new JsonParseException(element + " in JSON-String could not be parsed.");
 	}
 
 	/**

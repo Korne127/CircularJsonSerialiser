@@ -44,7 +44,7 @@ public class JSONObject implements JSONElement {
 	 */
 	public JSONObject(String content) throws JsonParseException {
 		content = content.replaceAll("[\\n\\t]", "");
-		map = ((JSONObject) JSONReader.readObject(content, 0).getValue()).map;
+		map = ((JSONObject) JSONReader.readElement(content, true, 0).getValue()).map;
 	}
 
 	/**
