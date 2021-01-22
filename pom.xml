@@ -6,11 +6,42 @@
 
 	<groupId>de.korne127.circularjsonserialiser</groupId>
 	<artifactId>circular-json-serialiser</artifactId>
-	<version>1.0-SNAPSHOT</version>
+	<version>1.0</version>
 
 	<properties>
 		<maven.compiler.target>1.8</maven.compiler.target>
 		<maven.compiler.source>1.8</maven.compiler.source>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 	</properties>
+
+	<name>CircularJsonSerialiser</name>
+	<description>
+		CircularJsonSerialiser ist ein Serialiser für Java mit dem Ziel, dass ohne manuelle Konfiguration alle
+		Klassen- und Objektstrukturen korrekt gespeichert und identisch wiederhergestellt werden.
+	</description>
+	<url>https://github.com/Korne127/CircularJsonSerialiser</url>
+
+	<licenses>
+		<license>
+			<name>GNU Affero General Public License v3.0</name>
+			<url>http://www.gnu.org/licenses/agpl-3.0.txt</url>
+			<distribution>repo</distribution>
+		</license>
+	</licenses>
+
+	<developers>
+		<developer>
+			<id>Korne127</id>
+			<name>Kornelius Rohrschneider</name>
+			<url>https://github.com/Korne127</url>
+		</developer>
+	</developers>
+
+	<scm>
+		<connection>scm:git:git://github.com/Korne127/CircularJsonSerialiser.git</connection>
+		<developerConnection>scm:git:ssh://github.com:Korne127/CircularJsonSerialiser.git</developerConnection>
+		<url>https://github.com/Korne127/CircularJsonSerialiser</url>
+	</scm>
 
 </project>
