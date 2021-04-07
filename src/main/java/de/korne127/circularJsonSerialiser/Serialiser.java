@@ -184,21 +184,22 @@ public class Serialiser {
 	}
 
 	/**
-	 * Konvertiert rekursiv ein angegebenes Objekt zu einem für JSON benutzbares Objekt:<br>
-	 * Falls das angegebene Objekt null oder {@link #isSimpleType(Class) simpel} ist, wird es zurückgegeben.<br>
-	 * Falls das angegebene Objekt bereits an einer anderen Stelle gespeichert wird, wird nur ein Verweis auf
-	 * diese Stelle gespeichert und zurückgegeben.<br>
-	 * Falls das angegebene Objekt in einer anderen Datei gespeichert werden soll, wird nur ein Verweis auf die
-	 * Stelle in der anderen Datei gespeichert und das Objekt an dieser Stelle gespeichert.<br>
-	 * Falls das angegebene Objekt ein Array oder eine Collection ist, wird die Methode für alle Elemente
-	 * aufgerufen und zusammen in einem JSON-Array zurückgegeben.<br>
-	 * Falls das angegebene Objekt eine Map ist, wird die Methode für alle Keys und dazugehörigen Values
-	 * aufgerufen, je ein Key und der dazugehörige value in einem JSON-Objekt gespeichert und alle JSON-Objekte
-	 * in einem JSON-Array zurückgegeben.<br>
-	 * Ansonsten werden alle Felder des Objektes (und aller Oberklassen) durchgegangen und aufgerufen und in
-	 * einem JSON-Objekt gespeichert, welches dann zurückgegeben wird.
-	 * @param object Das Objekt, welches zu einem für JSON benutzbaren Objekt umgewandelt werden soll
-	 * @return Das aus dem angegebenen Objekt kodierte für JSON benutzbare Objekt
+	 * Serialisiert ein angegebenes Java-Objekt in ein für Json benutzbares Objekt.<br>
+	 * Falls das angegebene Objekt null ist, wird null zurückgegeben.<br>
+	 * Falls das angegebene Objekt {@link #isSimpleType(Class) simpel} ist, wird
+	 * {@link #simpleTypeToJson(Object, Class) simpleTypeToJson} zurückgegeben.<br>
+	 * Falls das angegebene Objekt ein Enum ist, wird es als String kodiert zurückgegeben.<br>
+	 * Falls das angegebene Objekt bereits serialisiert ist, wird ein als String kodierter Verweis zurückgegeben.<br>
+	 * Falls das angegebene Objekt ein Array oder eine Collection ist, wird
+	 * {@link #collectionToJson(Object, Class, int, String) collectionToJson} zurückgegeben.<br>
+	 * Falls das angegebene Objekt eine Map ist, wird
+	 * {@link #mapToJson(Map, Class, int, String) mapToJson} zurückgegeben.<br>
+	 * Falls das angegebene Objekt von einer Klasse aus {@link SpecialClasses} ist, wird
+	 * {@link #specialClassToJson(Object, Class) specialClassToJson} zurückgegeben.<br>
+	 * Ansonsten wird {@link #javaObjectToJson(Object, Class, int, String) javaObjectToJson} zurückgegeben.
+	 * @param object Das angegebene Objekt, das serialisiert werden soll.
+	 * @param parentFileName Der Name der Datei, in die das Elternobjekt gespeichert werden soll
+	 * @return Ein für Json benutzbares Objekt, in das das angegebene Objekt serialisiert wurde
 	 * @throws SerialiseException Wird geworfen, falls ein Fehler beim Serialisieren des Objektes auftritt.
 	 */
 	private Object objectToJson(Object object, String parentFileName) throws SerialiseException {
@@ -207,14 +208,7 @@ public class Serialiser {
 		}
 		Class<?> objectClass = object.getClass();
 		if (isSimpleType(objectClass)) {
-			if (objectClass == String.class) {
-				String string = (String) object;
-				if (string.matches("(\\\\)*[@#].*")) {
-					string = "\\" + string;
-					return string;
-				}
-			}
-			return object;
+			return simpleTypeToJson(object, objectClass);
 		}
 		if (objectClass.isEnum()) {
 			return "#" + objectClass.getName() + "=" + object.toString();
@@ -227,101 +221,171 @@ public class Serialiser {
 		hashTable.put(objectHash, object);
 
 		if (objectClass.isArray() || object instanceof Collection) {
-			Iterable<?> objectIterable;
-			if (objectClass.isArray()) {
-				currentFieldType = FieldType.ARRAY;
-				Object[] objectArray;
-				if (objectClass.getComponentType().isPrimitive()) {
-					objectArray = convertPrimitiveToArray(object);
-				} else {
-					objectArray = (Object[]) object;
-				}
-				objectIterable = Arrays.asList(objectArray);
-			} else {
-				currentFieldType = FieldType.COLLECTION;
-				objectIterable = (Collection<?>) object;
-			}
-			JSONArray jsonChild = new JSONArray();
-			jsonChild.put(objectClass.getName() + "=" + objectHash);
-			for (Object objectChild : objectIterable) {
-				String childFileName = getFileName(objectChild);
-				if (multiFile && parentFileName.equals(childFileName)) {
-					childFileName = null;
-				}
-				Object childJson = objectToJson(objectChild,
-						childFileName == null ? parentFileName : childFileName);
-				if (!multiFile || childJson == null || childFileName == null ||
-						isSimpleType(childJson.getClass())) {
-					jsonChild.put(childJson);
-				} else {
-					int childHash = System.identityHashCode(objectChild);
-					jsonChild.put("@" + childFileName + "#" + childHash);
-					putInWholeSeparatedJson(childFileName, childHash, childJson);
-				}
-			}
-			return jsonChild;
+			return collectionToJson(object, objectClass, objectHash, parentFileName);
 		}
-
 		if (object instanceof Map) {
-			currentFieldType = FieldType.MAP;
-			JSONArray map = new JSONArray();
-			map.put(objectClass.getName() + "=" + objectHash);
-			Map<?, ?> objectMap = (Map<?, ?>) object;
-			for (Object objectMapKey : objectMap.keySet()) {
-				Object objectMapValue = objectMap.get(objectMapKey);
-				JSONObject mapChild = new JSONObject();
-
-				String keyFileName = getFileName(objectMapKey);
-				if (multiFile && parentFileName.equals(keyFileName)) {
-					keyFileName = null;
-				}
-				Object mapKeyJson = objectToJson(objectMapKey,
-						keyFileName == null ? parentFileName : keyFileName);
-				if (!multiFile || mapKeyJson == null || keyFileName == null ||
-						isSimpleType(mapKeyJson.getClass())) {
-					mapChild.put("key", mapKeyJson);
-				} else {
-					int childHash = System.identityHashCode(objectMapKey);
-					mapChild.put("key", "@" + keyFileName + "#" + childHash);
-					putInWholeSeparatedJson(keyFileName, childHash, mapKeyJson);
-				}
-
-				String valueFileName = getFileName(objectMapValue);
-				if (multiFile && parentFileName.equals(valueFileName)) {
-					valueFileName = null;
-				}
-				Object mapValueJson = objectToJson(objectMapValue,
-						valueFileName == null ? parentFileName : valueFileName);
-				if (!multiFile || mapValueJson == null || valueFileName == null ||
-						isSimpleType(mapValueJson.getClass())) {
-					mapChild.put("value", mapValueJson);
-				} else {
-					int childHash = System.identityHashCode(objectMapValue);
-					mapChild.put("value", "@" + valueFileName + "#" + childHash);
-					putInWholeSeparatedJson(valueFileName, childHash, mapValueJson);
-				}
-				map.put(mapChild);
-			}
-			return map;
+			return mapToJson((Map<?, ?>) object, objectClass, objectHash, parentFileName);
 		}
 		if (SpecialClasses.getClassMap().containsKey(objectClass.getName())) {
-			SpecialClasses specialClass = SpecialClasses.getClassMap().get(objectClass.getName());
-			String result = specialClass.serialise(object);
-			if (result == null) {
-				throw new SerialiseException(getCurrentFieldInformation(objectClass.getName()) +
-						" could not be deserialised.");
-			}
-			return "#" + specialClass.getSpecialClassName() + "=" + result;
+			return specialClassToJson(object, objectClass);
 		}
+		return javaObjectToJson(object, objectClass, objectHash, parentFileName);
+	}
+
+	/**
+	 * Serialisiert ein simples Objekt (Wrapper-Objekt eines simplen Datentyps oder String) in ein für Json
+	 * benutzbares Objekt.<br>
+	 * Dabei werden Wrapper-Objekte direkt zurückgegeben, Strings, die mit einem @ oder # anfangen werden vorher
+	 * escaped, da ein String, der mit einem dieser Zeichen anfängt, als bestimmte Kodierung fungiert.
+	 * @param object Das Objekt, das serialisiert werden soll
+	 * @param objectClass Die Klasse des Objektes, das serialisiert werden soll
+	 * @return Ein für Json benutzbares Objekt, in das das angegebene Objekt serialisiert wurde
+	 */
+	private Object simpleTypeToJson(Object object, Class<?> objectClass) {
+		if (objectClass == String.class) {
+			String string = (String) object;
+			if (string.matches("(\\\\)*[@#].*")) {
+				string = "\\" + string;
+				return string;
+			}
+		}
+		return object;
+	}
+
+	/**
+	 * Serialisiert ein Array bzw. eine Collection in ein JSONArray.<br>
+	 * Dabei werden alle Inhalte des Arrays bzw. der Collection abgefragt und ebenfalls in JSON-Elemente
+	 * {@link #objectToJson(Object, String) serialisiert} und dem JSONArray dann hinzugefügt.
+	 * @param object Das Objekt, das serialisiert werden soll
+	 * @param objectClass Die Klasse des Objektes, das serialisiert werden soll
+	 * @param objectHash Der Hash des Objektes, das serialisiert werden soll
+	 * @param parentFileName Der Name der Datei, in die das Elternobjekt gespeichert werden soll
+	 * @return Ein JSONArray, in das das angegebene Objekt serialisiert wurde
+	 * @throws SerialiseException Wird geworfen, falls ein Fehler beim Serialisieren des Objektes auftritt.
+	 */
+	private JSONArray collectionToJson(Object object, Class<?> objectClass, int objectHash, String parentFileName)
+			throws SerialiseException {
+		Iterable<?> objectIterable;
+		if (objectClass.isArray()) {
+			currentFieldType = FieldType.ARRAY;
+			Object[] objectArray;
+			if (objectClass.getComponentType().isPrimitive()) {
+				objectArray = convertPrimitiveToArray(object);
+			} else {
+				objectArray = (Object[]) object;
+			}
+			objectIterable = Arrays.asList(objectArray);
+		} else {
+			currentFieldType = FieldType.COLLECTION;
+			objectIterable = (Collection<?>) object;
+		}
+		JSONArray jsonChild = new JSONArray();
+		jsonChild.put(objectClass.getName() + "=" + objectHash);
+		for (Object objectChild : objectIterable) {
+			String childFileName = getFileName(objectChild);
+			if (multiFile && parentFileName.equals(childFileName)) {
+				childFileName = null;
+			}
+			Object childJson = objectToJson(objectChild, childFileName == null ? parentFileName : childFileName);
+			if (!multiFile || childJson == null || childFileName == null || isSimpleType(childJson.getClass())) {
+				jsonChild.put(childJson);
+			} else {
+				int childHash = System.identityHashCode(objectChild);
+				jsonChild.put("@" + childFileName + "#" + childHash);
+				putInWholeSeparatedJson(childFileName, childHash, childJson);
+			}
+		}
+		return jsonChild;
+	}
+
+	/**
+	 * Serialisiert eine Map in ein JSONArray.<br>
+	 * Dabei werden alle keys und values der Map abgefragt und ebenfalls in JSON-Elemente
+	 * {@link #objectToJson(Object, String) serialisiert} und dem JSONArray dann je als ein JSONObject hinzugefügt.
+	 * @param objectMap Die Map, die serialisiert werden soll
+	 * @param objectClass Die Klasse der Map, die serialisiert werden soll
+	 * @param objectHash Der Hash der Map, die serialisiert werden soll
+	 * @param parentFileName Der Name der Datei, in die das Elternobjekt gespeichert werden soll
+	 * @return Ein JSONArray, in das die angegebene Map serialisiert wurde
+	 * @throws SerialiseException Wird geworfen, falls ein Fehler beim Serialisieren des Objektes auftritt.
+	 */
+	private JSONArray mapToJson(Map<?, ?> objectMap, Class<?> objectClass, int objectHash, String parentFileName)
+			throws SerialiseException {
+		currentFieldType = FieldType.MAP;
+		JSONArray map = new JSONArray();
+		map.put(objectClass.getName() + "=" + objectHash);
+		for (Object objectMapKey : objectMap.keySet()) {
+			Object objectMapValue = objectMap.get(objectMapKey);
+			JSONObject mapChild = new JSONObject();
+
+			String keyFileName = getFileName(objectMapKey);
+			if (multiFile && parentFileName.equals(keyFileName)) {
+				keyFileName = null;
+			}
+			Object mapKeyJson = objectToJson(objectMapKey, keyFileName == null ? parentFileName : keyFileName);
+			if (!multiFile || mapKeyJson == null || keyFileName == null || isSimpleType(mapKeyJson.getClass())) {
+				mapChild.put("key", mapKeyJson);
+			} else {
+				int childHash = System.identityHashCode(objectMapKey);
+				mapChild.put("key", "@" + keyFileName + "#" + childHash);
+				putInWholeSeparatedJson(keyFileName, childHash, mapKeyJson);
+			}
+
+			String valueFileName = getFileName(objectMapValue);
+			if (multiFile && parentFileName.equals(valueFileName)) {
+				valueFileName = null;
+			}
+			Object mapValueJson = objectToJson(objectMapValue, valueFileName == null ? parentFileName : valueFileName);
+			if (!multiFile || mapValueJson == null || valueFileName == null || isSimpleType(mapValueJson.getClass())) {
+				mapChild.put("value", mapValueJson);
+			} else {
+				int childHash = System.identityHashCode(objectMapValue);
+				mapChild.put("value", "@" + valueFileName + "#" + childHash);
+				putInWholeSeparatedJson(valueFileName, childHash, mapValueJson);
+			}
+			map.put(mapChild);
+		}
+		return map;
+	}
+
+	/**
+	 * Serialisiert ein Objekt einer Klasse aus {@link SpecialClasses} in einen für Json benutzbaren String.<br>
+	 * Dabei wird die Serialisierungs-Methode der entsprechenden Klasse des Objektes mit dem Objekt aufgerufen und
+	 * der daraus entstandene String kodiert zurückgegeben.
+	 * @param object Das Objekt einer Klasse aus {@link SpecialClasses}, das serialisiert werden soll
+	 * @param objectClass Die Klasse des Objektes, das serialisiert werden soll
+	 * @return Ein String, in den das Objekt serialisiert wurde
+	 * @throws SerialiseException Wird geworfen, falls ein Fehler beim Serialisieren des Objektes auftritt.
+	 */
+	private String specialClassToJson(Object object, Class<?> objectClass) throws SerialiseException {
+		SpecialClasses specialClass = SpecialClasses.getClassMap().get(objectClass.getName());
+		String result = specialClass.serialise(object);
+		if (result == null) {
+			throw new SerialiseException(getCurrentFieldInformation(objectClass.getName()) +
+					" could not be deserialised.");
+		}
+		return "#" + specialClass.getSpecialClassName() + "=" + result;
+	}
+
+	/**
+	 * Serialisiert ein Java-Objekt in ein JSONObject.<br>
+	 * Dabei werden alle Attribute des Objektes abgefragt und ebenfalls in JSON-Elemente
+	 * {@link #objectToJson(Object, String) serialisiert} und dem JSONObject dann hinzugefügt.
+	 * @param object Das Objekt, das serialisiert werden soll
+	 * @param objectClass Die Klasse des Objektes, das serialisiert werden soll
+	 * @param objectHash Der Hash des Objektes, das serialisiert werden soll
+	 * @param parentFileName Der Name der Datei, in die das Elternobjekt gespeichert werden soll
+	 * @return Ein JSONObject, in die das angegebene Objekt serialisiert wurde
+	 * @throws SerialiseException Wird geworfen, falls ein Fehler beim Serialisieren des Objektes auftritt.
+	 */
+	private JSONObject javaObjectToJson(Object object, Class<?> objectClass, int objectHash, String parentFileName)
+			throws SerialiseException {
 		JSONObject jsonObject = new JSONObject();
 		jsonObject.put("class", objectClass.getName() + "=" + objectHash);
 		while (objectClass != null) {
 			for (Field objectField : objectClass.getDeclaredFields()) {
 				objectField.setAccessible(true);
-				if (objectField.isAnnotationPresent(SerialiseIgnore.class)) {
-					continue;
-				}
-				if (isStaticFinal(objectField)) {
+				if (objectField.isAnnotationPresent(SerialiseIgnore.class) || isStaticFinal(objectField)) {
 					continue;
 				}
 				currentField = objectField;
@@ -339,8 +403,7 @@ public class Serialiser {
 					currentFileName = null;
 				}
 				Object childJson = objectToJson(child, currentFileName == null ? parentFileName : currentFileName);
-				if (!multiFile || childJson == null || currentFileName == null ||
-						isSimpleType(childJson.getClass())) {
+				if (!multiFile || childJson == null || currentFileName == null || isSimpleType(childJson.getClass())) {
 					jsonObject.put(objectField.getName(), childJson);
 				} else {
 					int childHash = System.identityHashCode(child);
@@ -352,6 +415,7 @@ public class Serialiser {
 		}
 		return jsonObject;
 	}
+
 
 	/**
 	 * Berechnet aus dem angegebenen JSON-String ein Objekt, welches zurückgegeben wird.<br>
