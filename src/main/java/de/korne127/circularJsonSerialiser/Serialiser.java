@@ -933,6 +933,7 @@ public class Serialiser {
 	}
 
 
+	//----WEITERE HILFSMETHODEN----
 
 	/**
 	 * Gibt das Objekt mit dem angegebenen Hash in der angegebenen Datei zurück, falls es dort gespeichert
@@ -954,18 +955,19 @@ public class Serialiser {
 
 	/**
 	 * Hilfsmethode:<br>
-	 * Konvertiert ein Array eines primitiven Datentyps (z.B. int) in ein Array des Wrapper-Objektes dieses
-	 * Datentyps (z.B. Integer).
-	 * @param val Das Array eines primitiven Datentyps, welches konvertiert werden soll
-	 * @return Das konvertierte Array eines Wrapper-Objektes
+	 * Setzt ein bestimmtes Objekt mit einem bestimmten Hash in das wholeSeparatedJson-Objekt.
+	 * @param fileName Der Name der Datei, in die Das Objekt gesetzt werden soll
+	 * @param childHash Der Hash des Objektes, unter dem er gespeichert werden soll
+	 * @param childObject Das Objekt, welches gespeichert werden soll
 	 */
-	private Object[] convertPrimitiveToArray(Object val) {
-		int length = Array.getLength(val);
-		Object[] outputArray = new Object[length];
-		for(int i = 0; i < length; i++){
-			outputArray[i] = Array.get(val, i);
+	private void putInWholeSeparatedJson(String fileName, int childHash, Object childObject) {
+		if (wholeSeparatedJson.containsKey(fileName)) {
+			wholeSeparatedJson.get(fileName).put(String.valueOf(childHash), childObject);
+		} else {
+			JSONObject newObject = new JSONObject();
+			newObject.put(String.valueOf(childHash), childObject);
+			wholeSeparatedJson.put(fileName, newObject);
 		}
-		return outputArray;
 	}
 
 	/**
@@ -1056,52 +1058,6 @@ public class Serialiser {
 
 	/**
 	 * Hilfsmethode:<br>
-	 * Gibt eine neue Instanz des angegebenen Enums mit dem angegebenen Wert zurück
-	 * @param name Der Wert des Enums, der zurückgegeben werden soll
-	 * @param type Die Enum-Klasse
-	 * @return Eine neue Instanz des angegebenen Enums mit dem angegebenen Wert
-	 */
-	@SuppressWarnings("unchecked")
-	private <T extends Enum<T>> T getNewEnumInstance(String name, Class<?> type) {
-		return Enum.valueOf((Class<T>) type, name);
-	}
-
-	/**
-	 * Hilfsmethode:<br>
-	 * Gibt den Namen der Datei zurück, in die das angegebene Objekt serialisiert werden soll
-	 * @param field Das Feld, in dem das angegebene Objekt gespeichert ist
-	 * @param object Das angegebene Objekt
-	 * @return Der Name der Datei, in die das angegebene Objekt serialisiert werden soll
-	 */
-	private String getFileName(Field field, Object object) {
-		if (field.isAnnotationPresent(SerialiseFile.class)) {
-			return field.getDeclaredAnnotation(SerialiseFile.class).value();
-		}
-		return getFileName(object);
-	}
-
-	/**
-	 * Hilfsmethode:<br>
-	 * Gibt den Namen der Datei zurück, in die das angegebene Objekt serialisiert werden soll
-	 * @param object Das angegebene Objekt
-	 * @return Der Name der Datei, in die das angegebene Objekt serialisiert werden soll
-	 */
-	private String getFileName(Object object) {
-		if (object == null) {
-			return null;
-		}
-		Class<?> objectClass = object.getClass();
-		while (objectClass.isArray()) {
-			objectClass = objectClass.getComponentType();
-		}
-		if (objectClass.isAnnotationPresent(SerialiseFile.class)) {
-			return objectClass.getDeclaredAnnotation(SerialiseFile.class).value();
-		}
-		return null;
-	}
-
-	/**
-	 * Hilfsmethode:<br>
 	 * Gibt einen String, der Informationen über das Element, was aktuell serialisiert oder
 	 * deserialisiert wird, zurück. Dies wird für Fehlermeldungen benutzt, falls bei der
 	 * Serialisierung oder Deserialisiserung ein Fehler auftritt.
@@ -1125,21 +1081,69 @@ public class Serialiser {
 				" (type: " + currentType + ")";
 	}
 
+
+	//----STATISCHE HILFSMETHODEN----
+
 	/**
 	 * Hilfsmethode:<br>
-	 * Setzt ein bestimmtes Objekt mit einem bestimmten Hash in das wholeSeparatedJson-Objekt.
-	 * @param fileName Der Name der Datei, in die Das Objekt gesetzt werden soll
-	 * @param childHash Der Hash des Objektes, unter dem er gespeichert werden soll
-	 * @param childObject Das Objekt, welches gespeichert werden soll
+	 * Konvertiert ein Array eines primitiven Datentyps (z.B. int) in ein Array des Wrapper-Objektes dieses
+	 * Datentyps (z.B. Integer).
+	 * @param val Das Array eines primitiven Datentyps, welches konvertiert werden soll
+	 * @return Das konvertierte Array eines Wrapper-Objektes
 	 */
-	private void putInWholeSeparatedJson(String fileName, int childHash, Object childObject) {
-		if (wholeSeparatedJson.containsKey(fileName)) {
-			wholeSeparatedJson.get(fileName).put(String.valueOf(childHash), childObject);
-		} else {
-			JSONObject newObject = new JSONObject();
-			newObject.put(String.valueOf(childHash), childObject);
-			wholeSeparatedJson.put(fileName, newObject);
+	private static Object[] convertPrimitiveToArray(Object val) {
+		int length = Array.getLength(val);
+		Object[] outputArray = new Object[length];
+		for(int i = 0; i < length; i++){
+			outputArray[i] = Array.get(val, i);
 		}
+		return outputArray;
+	}
+
+	/**
+	 * Hilfsmethode:<br>
+	 * Gibt eine neue Instanz des angegebenen Enums mit dem angegebenen Wert zurück
+	 * @param name Der Wert des Enums, der zurückgegeben werden soll
+	 * @param type Die Enum-Klasse
+	 * @return Eine neue Instanz des angegebenen Enums mit dem angegebenen Wert
+	 */
+	@SuppressWarnings("unchecked")
+	private static <T extends Enum<T>> T getNewEnumInstance(String name, Class<?> type) {
+		return Enum.valueOf((Class<T>) type, name);
+	}
+
+	/**
+	 * Hilfsmethode:<br>
+	 * Gibt den Namen der Datei zurück, in die das angegebene Objekt serialisiert werden soll
+	 * @param field Das Feld, in dem das angegebene Objekt gespeichert ist
+	 * @param object Das angegebene Objekt
+	 * @return Der Name der Datei, in die das angegebene Objekt serialisiert werden soll
+	 */
+	private static String getFileName(Field field, Object object) {
+		if (field.isAnnotationPresent(SerialiseFile.class)) {
+			return field.getDeclaredAnnotation(SerialiseFile.class).value();
+		}
+		return getFileName(object);
+	}
+
+	/**
+	 * Hilfsmethode:<br>
+	 * Gibt den Namen der Datei zurück, in die das angegebene Objekt serialisiert werden soll
+	 * @param object Das angegebene Objekt
+	 * @return Der Name der Datei, in die das angegebene Objekt serialisiert werden soll
+	 */
+	private static String getFileName(Object object) {
+		if (object == null) {
+			return null;
+		}
+		Class<?> objectClass = object.getClass();
+		while (objectClass.isArray()) {
+			objectClass = objectClass.getComponentType();
+		}
+		if (objectClass.isAnnotationPresent(SerialiseFile.class)) {
+			return objectClass.getDeclaredAnnotation(SerialiseFile.class).value();
+		}
+		return null;
 	}
 
 	/**
