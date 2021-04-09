@@ -474,8 +474,7 @@ public class Serialiser {
 	 * {@link #simpleTypeToObject(Object) simpleTypeToObject} deserialisiert und zurückgegeben.<br>
 	 * Ansonsten werden die Informationen abgefragt, wie die Klasse und der beim Serialisieren gespeicherte Hash
 	 * des Java-Objektes ist.<br>
-	 * Falls das Objekt mit diesem Hash bereits deserialisiert wurde, wird es zurückgegeben, ansonsten wird eine
-	 * neue Instanz der Klasse des Objektes erstellt.<br>
+	 * Falls das Objekt mit diesem Hash bereits deserialisiert wurde, wird es zurückgegeben.<br>
 	 * Falls das angegebene Objekt ein JSONArray ist, wird es über
 	 * {@link #jsonArrayToObject(JSONArray, Class, String, int) jsonArrayToObject} deserialisiert und zurückgegeben,
 	 * ansonsten über {@link #jsonObjectToObject(JSONObject, Class, int) jsonObjectToObject}.
@@ -586,7 +585,7 @@ public class Serialiser {
 		if (hashTable.containsKey(hash)) {
 			return hashTable.get(hash);
 		}
-		Object linkedObject = getLinkedObject(multiFile ? wholeSeparatedJson : wholeSingleJson, hash);
+		Object linkedObject = getLinkedObject(hash);
 		if (linkedObject == null) {
 			throw new DeserialiseException("The definition of the linked object " +
 					string + "(" + getCurrentFieldInformation(null) +
@@ -765,24 +764,45 @@ public class Serialiser {
 	}
 
 	/**
-	 * Gibt ein Objekt mit dem angegebenen Hash zurück, falls es im angegebenen für Json benutzbaren
-	 * Objekt enthalten ist:<br>
-	 * Falls das angegebene Objekt null oder {@link #isSimpleType(Class) simpel} ist, wird null zurückgegeben.<br>
-	 * Falls das angegebene Objekt eine Map ist und nicht das Objekt mit dem gesuchten Hash ist, wird diese
-	 * Methode für jeden key und jeden value der Map aufgerufen und null zurückgegeben, falls kein Aufruf das
-	 * Objekt findet.<br>
-	 * Falls das angegebene Objekt ein Array oder Iterable ist und nicht das Objekt mit dem gesuchten Hash
-	 * ist, wird diese Methode für jedes Unterobjekt aufgerufen und null zurückgegeben, falls kein Aufruf das
-	 * Objekt findet.<br>
-	 * Falls das angegebene Objekt die globale Json Map ist, wird diese Methode für jedes Objekt in jeder
-	 * Datei dieser Map aufgerufen und null zurückgegeben, falls kein Aufruf das Objekt findet.<br>
-	 * Ansonsten wird diese Methode für jedes Feld des Objektes aufgerufen und null zurückgegeben, falls kein
-	 * Aufruf das Objekt findet.
-	 * @param json Das für Json benutzbare Objekt, welches nach dem Objekt mit dem angegebenen Hash durchsucht
-	 *             werden soll
-	 * @param searchedHash Der angegebene Hash, dessen dazugehöriges Objekt zurückgegeben werden soll
-	 * @return Das Objekt mit dem angegebenen Hash, falls es im angegebenen für Json benutzbarem Objekt enthalten
-	 * ist, ansonsten null
+	 * Gibt das Objekt mit dem angegebenen Hash zurück, falls es in einer der JSON-Dateien existiert.<br>
+	 * Falls es mehrere JSON-Dateien gibt, wird für jedes Objekt aus jeder JSON-Datei
+	 * {@link #getLinkedObject(Object, int) getLinkedObject} aufgerufen; falls einer der Aufrufe einen
+	 * Rückgabewert liefert wird dieser zurückgegeben, ansonsten null.<br>
+	 * Falls es nur eine JSON-Datei gibt, wird {@link #getLinkedObject(Object, int) getLinkedObject} für diese
+	 * Datei aufgerufen und der Rückgabewert zurückgegeben.
+	 * @param searchedHash Der Hash, dessen zugehöriges Objekt in den JSON-Dateien zurückgegeben werden soll
+	 * @return Das Objekt, das zu dem angegeben Hash in den JSON-Dateien gespeichert ist, falls es existiert;<br>
+	 * ansonsten null
+	 * @throws DeserialiseException Wird geworfen, falls ein Fehler aufgetreten ist, während das verlinkte
+	 * Objekt gesucht wurde.
+	 */
+	private Object getLinkedObject(int searchedHash) throws DeserialiseException {
+		if (multiFile) {
+			for (JSONObject value : wholeSeparatedJson.values()) {
+				for (Object object : value.values()) {
+					Object linkedObject = getLinkedObject(object, searchedHash);
+					if (linkedObject != null) {
+						return linkedObject;
+					}
+				}
+			}
+			return null;
+		} else {
+			return getLinkedObject(wholeSingleJson, searchedHash);
+		}
+	}
+
+	/**
+	 * Gibt das Objekt mit dem angegebenen Hash zurück, falls es in dem angegebenen JSON-Element existiert.<br>
+	 * Falls das angegebene JSON-Element null oder {@link #isSimpleType(Class) simpel} ist, wird null
+	 * zurückgegeben.<br>
+	 * Falls das angegebene JSON-Element ein JSONArray ist, wird
+	 * {@link #getLinkedObjectFromJSONArray(JSONArray, int) getLinkedObjectFromJSONArray} zurückgegeben,
+	 * ansonsten {@link #getLinkedObjectFromJSONObject(JSONObject, int) getLinkedObjectFromJSONObject}.
+	 * @param json Das JSON-Element, in dem nach dem Objekt mit dem angegebenen Hash gesucht werden soll
+	 * @param searchedHash Der Hash, dessen zugehöriges Objekt in dem angegebenen JSON-Element gesucht werden soll
+	 * @return Das Objekt, das zu dem angegebenen Hash in dem JSON-Element gespeichert ist, falls es existiert;<br>
+	 * ansonsten null
 	 * @throws DeserialiseException Wird geworfen, falls ein Fehler aufgetreten ist, während das verlinkte
 	 * Objekt gesucht wurde.
 	 */
@@ -794,68 +814,81 @@ public class Serialiser {
 			return null;
 		}
 		if (json instanceof JSONArray) {
-			JSONArray jsonArray = (JSONArray) json;
-			String[] classInfos = jsonArray.getString(0).split("=");
+			return getLinkedObjectFromJSONArray((JSONArray) json, searchedHash);
+		}
+		return getLinkedObjectFromJSONObject((JSONObject) json, searchedHash);
+	}
 
-			int hash = Integer.parseInt(classInfos[1]);
-			if (hash == searchedHash) {
-				return jsonToObject(jsonArray);
-			}
+	/**
+	 * Gibt das Objekt mit dem angegebenen Hash zurück, falls es in dem angegebenen JSONArray existiert.<br>
+	 * Falls das angegebene JSONArray den angegebenen Hash als gespeicherten Hash besitzt, wird es zurückgegeben.<br>
+	 * Falls das JSONArray eine serialisierte Map ist, wird für jeden key und value
+	 * {@link #getLinkedObject(Object, int) geprüft}, ob sich das gesuchte Objekt dort befindet. Falls einer der
+	 * Aufrufe einen Rückgabewert liefert wird dieser zurückgegeben, ansonsten null.<br>
+	 * Ansonsten wird für jedes Element aus dem JSONArray {@link #getLinkedObject(Object, int) geprüft}, ob sich das
+	 * gesuchte Objekt dort befindet. Falls einer der Aufrufe einen Rückgabewert liefert wird dieser zurückgegeben,
+	 * ansonsten null.
+	 * @param jsonArray Das JSONArray, in dem nach dem Objekt mit dem angegebenen Hash gesucht werden soll
+	 * @param searchedHash Der Hash, dessen zugehöriges Objekt in dem angegebenen JSONArray gesucht werden soll
+	 * @return Das Objekt, das zu dem angegebenen Hash in dem JSONArray gespeichert ist, falls es existiert;<br>
+	 * ansonsten null
+	 * @throws DeserialiseException Wird geworfen, falls ein Fehler aufgetreten ist, während das verlinkte
+	 * Objekt gesucht wurde.
+	 */
+	private Object getLinkedObjectFromJSONArray(JSONArray jsonArray, int searchedHash) throws DeserialiseException {
+		String[] classInfos = jsonArray.getString(0).split("=");
 
-			String className = classInfos[0];
-			Class<?> newClass;
-			try {
-				newClass = Class.forName(className);
-			} catch (ClassNotFoundException e) {
-				throw new DeserialiseException("The specified class " + className + ", used by " +
-						getCurrentFieldInformation(className) + " could not be found.", e);
-			}
+		int hash = Integer.parseInt(classInfos[1]);
+		if (hash == searchedHash) {
+			return jsonToObject(jsonArray);
+		}
 
-			if (!newClass.isArray()) {
-				if (Map.class.isAssignableFrom(newClass)) {
-					for (Object jsonArrayPart : jsonArray.skipFirst()) {
-						JSONObject mapPart = (JSONObject) jsonArrayPart;
-						Object keyPart = getLinkedObject(mapPart.get("key"), searchedHash);
-						if (keyPart != null) {
-							return keyPart;
-						}
-						Object valuePart = getLinkedObject(mapPart.get("value"), searchedHash);
-						if (valuePart != null) {
-							return valuePart;
-						}
-					}
-					return null;
-				}
-				for (Object jsonArrayPart : jsonArray.skipFirst()) {
-					Object collectionChild = getLinkedObject(jsonArrayPart, searchedHash);
-					if (collectionChild != null) {
-						return collectionChild;
-					}
-				}
-				return null;
-			}
+		String className = classInfos[0];
+		Class<?> newClass;
+		try {
+			newClass = Class.forName(className);
+		} catch (ClassNotFoundException e) {
+			throw new DeserialiseException("The specified class " + className + ", used by " +
+					getCurrentFieldInformation(className) + " could not be found.", e);
+		}
+
+		if (Map.class.isAssignableFrom(newClass)) {
 			for (Object jsonArrayPart : jsonArray.skipFirst()) {
-				Object arrayPart = getLinkedObject(jsonArrayPart, searchedHash);
-				if (arrayPart != null) {
-					return arrayPart;
+				JSONObject mapPart = (JSONObject) jsonArrayPart;
+				Object keyPart = getLinkedObject(mapPart.get("key"), searchedHash);
+				if (keyPart != null) {
+					return keyPart;
+				}
+				Object valuePart = getLinkedObject(mapPart.get("value"), searchedHash);
+				if (valuePart != null) {
+					return valuePart;
 				}
 			}
 			return null;
 		}
-		if (json instanceof Map) {
-			@SuppressWarnings("unchecked")
-			Map<String, JSONObject> jsonMap = (Map<String, JSONObject>) json;
-			for (JSONObject value : jsonMap.values()) {
-				for (Object object : value.values()) {
-					Object linkedObject = getLinkedObject(object, searchedHash);
-					if (linkedObject != null) {
-						return linkedObject;
-					}
-				}
+		for (Object jsonArrayPart : jsonArray.skipFirst()) {
+			Object part = getLinkedObject(jsonArrayPart, searchedHash);
+			if (part != null) {
+				return part;
 			}
-			return null;
 		}
-		JSONObject jsonObject = (JSONObject) json;
+		return null;
+	}
+
+	/**
+	 * Gibt das Objekt mit dem angegebenen Hash zurück, falls es in dem angegebene JSONObject existiert.<br>
+	 * Falls das angegebene JSONObject den angegebenen Hash als gespeicherten Hash besitzt, wird es zurückgegeben.<br>
+	 * Ansonsten wird für jeden im JSONObject gespeicherten Wert {@link #getLinkedObject(Object, int) geprüft},
+	 * ob sich das Objekt dort befindet. Falls einer der Aufrufe einen Rückgabewert liefert wird dieser
+	 * zurückgegeben, ansonsten null.
+	 * @param jsonObject Das JSONObject, in dem nach dem Objekt mit dem angegebenen Hash gesucht werden soll
+	 * @param searchedHash Der angegebene Hash, dessen dazugehöriges Objekt zurückgegeben werden soll
+	 * @return Das Objekt, das zu dem angegebenen Hash in dem JSONObject gespeichert ist, falls es existiert;<br>
+	 * ansonsten null
+	 * @throws DeserialiseException Wird geworfen, falls ein Fehler aufgetreten ist, während das verlinkte
+	 * Objekt gesucht wurde.
+	 */
+	private Object getLinkedObjectFromJSONObject(JSONObject jsonObject, int searchedHash) throws DeserialiseException {
 		int hash = Integer.parseInt(jsonObject.getString("class").split("=")[1]);
 		if (hash == searchedHash) {
 			return jsonToObject(jsonObject);
@@ -868,6 +901,8 @@ public class Serialiser {
 		}
 		return null;
 	}
+
+
 
 	/**
 	 * Gibt das Objekt mit dem angegebenen Hash in der angegebenen Datei zurück, falls es dort gespeichert
