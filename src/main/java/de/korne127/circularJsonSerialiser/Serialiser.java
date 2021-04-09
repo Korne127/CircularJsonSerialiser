@@ -6,6 +6,7 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,6 +35,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TransferQueue;
 
+import de.korne127.circularJsonSerialiser.annotations.BeforeSerialise;
 import de.korne127.circularJsonSerialiser.annotations.SerialiseFile;
 import de.korne127.circularJsonSerialiser.annotations.SerialiseIgnore;
 import de.korne127.circularJsonSerialiser.exceptions.DeserialiseException;
@@ -202,6 +204,7 @@ public class Serialiser {
 	 * {@link #simpleTypeToJson(Object, Class) simpleTypeToJson} zurückgegeben.<br>
 	 * Falls das angegebene Objekt ein Enum ist, wird es als String kodiert zurückgegeben.<br>
 	 * Falls das angegebene Objekt bereits serialisiert ist, wird ein als String kodierter Verweis zurückgegeben.<br>
+	 * Falls das angegebene Objekt eine Methode mit {@link BeforeSerialise} Annotation hat, wird sie ausgeführt.<br>
 	 * Falls das angegebene Objekt ein Array oder eine Collection ist, wird
 	 * {@link #collectionToJson(Object, Class, int, String) collectionToJson} zurückgegeben.<br>
 	 * Falls das angegebene Objekt eine Map ist, wird
@@ -231,6 +234,25 @@ public class Serialiser {
 			return "@" + objectHash;
 		}
 		hashTable.put(objectHash, object);
+
+		for (Method objectMethod : objectClass.getDeclaredMethods()) {
+			objectMethod.setAccessible(true);
+			if (objectMethod.isAnnotationPresent(BeforeSerialise.class)) {
+				if (objectMethod.getParameterCount() > 0) {
+					throw new SerialiseException("Error: The method " + objectClass.getName() + "#" +
+							objectMethod.getName() + " is annotated with the BeforeSerialise annotation but " +
+							"requires parameters.\nMethods annotated with the BeforeSerialise annotation can't " +
+							"use parameters.");
+				}
+				try {
+					objectMethod.invoke(object);
+				} catch (IllegalAccessException | InvocationTargetException e) {
+					throw new SerialiseException("Error: The method " + objectClass.getName() + "#" +
+							objectMethod.getName() + " is annotated with the BeforeSerialise annotation but " +
+							"could not be invoked.", e);
+				}
+			}
+		}
 
 		if (objectClass.isArray() || object instanceof Collection) {
 			return collectionToJson(object, objectClass, objectHash, parentFileName);

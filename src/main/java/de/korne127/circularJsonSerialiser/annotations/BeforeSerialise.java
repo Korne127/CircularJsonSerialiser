@@ -8,14 +8,14 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * SerialiseIgnore-Annotation für Felder:<br>
- * Wenn ein Attribut mit dieser Annotation belegt ist, wird es beim Serialisierungsprozess ignoriert
- * und nicht in dem generierten String kodiert mit zurückgegeben.
+ * BeforeSerialise-Annotation für Methoden:<br>
+ * Wenn eine Methode mit dieser Annotation belegt ist, wird sie vor der Serialisierung eines Objektes der
+ * entsprechenden Klasse ausgeführt.
  * @author Korne127
  */
-@Target(ElementType.FIELD)
+@Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 @Inherited
 @Documented
-public @interface SerialiseIgnore {
+public @interface BeforeSerialise {
 }

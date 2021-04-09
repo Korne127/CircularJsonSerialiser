@@ -8,7 +8,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * SerialiseFile-Annotation für Klassen<br>
+ * SerialiseFile-Annotation für Klassen und Felder:<br>
  * Bei einer Anfrage nach einer separierenden Serialisierung eines Objektes wird die Kodierung
  * aller Objekte aus einer mit dieser Annotation und einem bestimmten Wert belegten Klasse
  * zusammen separiert in einem anderen String zurückgegeben.<br>
