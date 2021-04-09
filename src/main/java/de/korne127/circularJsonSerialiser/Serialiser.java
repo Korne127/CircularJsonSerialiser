@@ -181,10 +181,10 @@ public class Serialiser {
 		Object mainObject = objectToJson(object, mainFileName);
 
 		if (wholeSeparatedJson.containsKey(mainFileName)) {
-			wholeSeparatedJson.get(mainFileName).put("Main", mainObject);
+			wholeSeparatedJson.get(mainFileName).putFirst("Main", mainObject);
 		} else {
 			JSONObject newObject = new JSONObject();
-			newObject.putFirst("Main", mainObject);
+			newObject.put("Main", mainObject);
 			wholeSeparatedJson.put(mainFileName, newObject);
 		}
 
@@ -595,6 +595,9 @@ public class Serialiser {
 			String[] linkInfo = string.substring(1).split("#");
 			String fileName = linkInfo[0];
 			int hash = Integer.parseInt(linkInfo[1]);
+			if (hashTable.containsKey(hash)) {
+				return hashTable.get(hash);
+			}
 			Object linkedObject = getLinkedFileObject(fileName, hash);
 			if (linkedObject == null) {
 				throw new DeserialiseException("The definition of the linked object " +
