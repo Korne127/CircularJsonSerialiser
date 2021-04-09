@@ -127,11 +127,17 @@ public class Serialiser {
 		this.collectionHandling = collectionHandling;
 	}
 
+
+	//----SERIALISE METHODEN----
+
 	/**
-	 * Konvertiert das angegebene Objekt zu einem JSON-Objekt, welches als String zurückgegeben wird.<br>
-	 * Für Implementierungsdetails, siehe {@link #objectToJson(Object object, String parentFileName)}.
-	 * @param object Das Objekt, welches zu einem JSON-Objekt konvertiert werden soll
-	 * @return Das aus dem angegebenen Objekt kodierte JSON-Objekt
+	 * Serialisiert das angegebene Objekt in ein JSON-Objekt, welches als String zurückgegeben wird.<br>
+	 * Es werden zunächst beim (De-)Serialisieren benutzte Hilfsvariablen geleert bzw. gesetzt.<br>
+	 * Dann wird {@link #objectToJson(Object, String) objectToJson} benutzt, um das angegebene Objekt zu
+	 * serialisieren und die toString-Methode von {@link JSONArray} bzw. {@link JSONObject}, um ein entsprechendes
+	 * Objekt in einen String umzuwandeln, der dann zurückgegeben wird.
+	 * @param object Das angegebene Objekt, das in einen String serialisiert werden soll
+	 * @return Ein JSON-String, in den das angegebene Objekt serialisiert wurde
 	 * @throws SerialiseException Wird geworfen, falls ein Fehler beim Serialisieren des Objektes
 	 * aufgetreten ist.
 	 */
@@ -145,12 +151,18 @@ public class Serialiser {
 	}
 
 	/**
-	 * Konvertiert das angegebene Objekt zu mehreren JSON-Objekten, welche in Dateien unterteilt als Strings
-	 * in einer Map zurückgegeben werden. Dabei bestimmen die SerialiseFile Annotations an einer Klasse in
-	 * welcher Datei ein Objekt der Klasse zurückgegeben wird.<br>
-	 * Für Implementierungsdetails, siehe {@link #objectToJson(Object object, String parentFileName)}.
-	 * @param object Das Objekt, welches zu JSON-Objekten konvertiert werden soll
-	 * @return Die aus dem angegebenen Objekt kodierten JSON-Objekte in einer Map zum Dateinamen zugeordnet
+	 * Serialisiert das angegebene Objekt in mehrere JSON-Objekte, welche als verschiedene Strings in einer
+	 * Map zu Dateinamen zugeordnet zurückgegeben werden. Dabei bestimmt die SerialiseFile Annotation an einer
+	 * Klasse oder Variable, in welcher Datei / zu welchem Dateinamen zugeordnet ein Objekt der Klasse bzw.
+	 * die Variable zurückgegeben wird.<br>
+	 * Es werden zunächst beim (De-)Serialisieren benutzte Hilfsvariablen geleert bzw. gesetzt.<br>
+	 * Dann wird {@link #objectToJson(Object, String) objectToJson} benutzt, um das angegebene Objekt zu
+	 * serialisieren. Durch die gesetzten Einstellungen wird auch eine Map von dem Dateinamen zu je einem
+	 * JSONObject erstellt, in die das serialisierte Hauptobjekt dann auch gesetzt wird.<br>
+	 * Jedes Element aus der Map wird über die toString-Methode von {@link JSONObject} in einen String umgewandelt
+	 * und die neue daraus resultierende Map wird zurückgegeben.
+	 * @param object Das angegebene Objekt, das in mehrere Strings serialisiert werden soll
+	 * @return Eine Map von Dateinamen zu JSON-Strings, in die das angegebene Objekt serialisiert wurde
 	 * @throws SerialiseException Wird geworfen, falls ein Fehler beim Serialisieren des Objektes
 	 * aufgetreten ist.
 	 */
@@ -417,11 +429,16 @@ public class Serialiser {
 	}
 
 
+	//----DESERIALISE METHODEN----
+
 	/**
-	 * Berechnet aus dem angegebenen JSON-String ein Objekt, welches zurückgegeben wird.<br>
-	 * Für Implementierungsdetails, siehe {@link #jsonToObject(Object object)}.
-	 * @param content Der JSON-String, aus dem ein Objekt berechnet werden soll
-	 * @return Das aus dem angegebenen JSON-String berechnete Objekt
+	 * Deserialisiert den angegebenen JSON-String in ein Java-Objekt, welches zurückgegeben wird.<br>
+	 * Es werden zunächst beim (De-)Serialisieren benutzte Hilfsvariablen geleert bzw. gesetzt.<br>
+	 * Es wird dabei aus dem angegebenen String ein JSONObject erstellt und danach
+	 * {@link #jsonToObject(Object) jsonToObject} benutzt, um das JSONObject zu deserialisieren und
+	 * das Resultat zurückzugeben.
+	 * @param content Der angegeben JSON-String, der in ein Java-Objekt deserialisiert werden soll
+	 * @return Ein Java-Objekt, in das der angegebene JSON-String deserialisiert wurde
 	 * @throws JsonParseException Wird geworfen, falls der JSON-String nicht geparst werden
 	 * konnte.
 	 * @throws DeserialiseException Wird geworfen, falls ein Fehler beim Deserialisieren
@@ -438,12 +455,17 @@ public class Serialiser {
 	}
 
 	/**
-	 * Berechnet aus den angegebenen JSON-Strings, die zum Dateinamen in einer Map zugeordnet sind ein
-	 * Objekt, welches zurückgegeben wird.<br>
-	 * Für Implementierungsdetails, siehe {@link #jsonToObject(Object object)}.
-	 * @param content Die JSON-Strings, die zum Dateinamen in einer Map geordnet sind, aus denen ein
-	 *                Objekt berechnet werden soll
-	 * @return Das aus den angegebenen JSON-Strings berechnete Objekt
+	 * Deserialisiert die in einer Map zu Dateinamen zugeordneten JSON-Strings in ein Java-Objekt.<br>
+	 * Es werden zunächst beim (De-)Serialisieren benutzte Hilfsvariablen geleert bzw. gesetzt.<br>
+	 * Es wird dabei aus der angegebenen Map eine neue Map gebildet, in die für jeden JSON-String ein
+	 * entsprechendes JSONObject erstellt und hinzugefügt wurde.
+	 * Dann wird das Hauptobjekt aus den JSONObjects aus der neugebildeten Map gesucht und es wird
+	 * {@link #jsonToObject(Object) jsonToObject} benutzt, um das JSONObject zu deserialisieren und das Resultat
+	 * zurückzugeben.
+	 * @param content Die angegebene Map von Dateinamen zu JSON-Strings, die in ein Java-Objekt deserialisiert
+	 *                werden sollen
+	 * @return Ein Java-Objekt, in das die angegebene Map mit JSON-Strings zu Dateinamen zugeordnet deserialisiert
+	 * wurde
 	 * @throws JsonParseException Wird geworfen, falls einer der JSON-Strings nicht geparst werden konnte.
 	 * @throws DeserialiseException Wird geworfen, falls ein Fehler beim Deserialisieren des Objektes
 	 * aufgetreten ist.
@@ -762,6 +784,11 @@ public class Serialiser {
 
 		return newObject;
 	}
+
+
+	//----GET LINKED OBJECT METHODEN----
+	//Solange die Variablen in der gleichen Reihenfolge deserialisiert werden wie sie serialisiert und
+	//gespeichert wurden (und JSON nicht manuell verändert wurde), werden diese niemals aufgerufen
 
 	/**
 	 * Gibt das Objekt mit dem angegebenen Hash zurück, falls es in einer der JSON-Dateien existiert.<br>
