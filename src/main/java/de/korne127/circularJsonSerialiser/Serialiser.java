@@ -468,21 +468,19 @@ public class Serialiser {
 	}
 
 	/**
-	 * Konvertiert rekursiv ein angegebenes für JSON benutzbares Objekt zu einem Objekt:<br>
-	 * Falls das angegebene Objekt null oder {@link #isSimpleType(Class) simpel} und kein Verweis ist,
-	 * wird es zurückgegeben.<br>
-	 * Falls das angegebene Objekt ein Verweis ist, wird das Objekt, auf das verwiesen wird berechnet
-	 * und zurückgegeben.<br>
-	 * Falls das angegebene Objekt ein kodiertes Array oder eine kodierte Collection ist, wird diese
-	 * Methode für jedes Element aufgerufen, die resultierenden Objekte in ein erstelltes Array /
-	 * eine erstellte Collection des ursprünglichen Typen gesetzt und dies zurückgegeben.<br>
-	 * Falls das angegebene Objekt eine kodierte Map ist, wird diese Methode für jeden key und
-	 * dazugehörigen value aufgerufen, die resultierenden Objekte passend in eine erstellte Map des
-	 * ursprünglichen Typen gesetzt und diese zurückgegeben.<br>
-	 * Ansonsten wird für jeden kodierten Feldinhalt dieses Objektes diese Methode aufgerufen und die
-	 * resultierenden Objekte in ein passendes erstelltes Objekt gesetzt und dies zurückgegeben.
-	 * @param json Das für JSON benutzbare Objekt, welches in ein Objekt umgewandelt werden soll
-	 * @return Das aus dem angegebenen für JSON benutzbare Objekt berechnete Objekt
+	 * Deserialisiert ein Objekt aus der JSON-Datei in ein Java-Objekt.<br>
+	 * Falls das angegebene Objekt der JSON-Datei null ist, wird null zurückgegeben.<br>
+	 * Falls das angegebene Objekt der JSON-Datei {@link #isSimpleType(Class) simpel} ist, wird es über
+	 * {@link #simpleTypeToObject(Object) simpleTypeToObject} deserialisiert und zurückgegeben.<br>
+	 * Ansonsten werden die Informationen abgefragt, wie die Klasse und der beim Serialisieren gespeicherte Hash
+	 * des Java-Objektes ist.<br>
+	 * Falls das Objekt mit diesem Hash bereits deserialisiert wurde, wird es zurückgegeben, ansonsten wird eine
+	 * neue Instanz der Klasse des Objektes erstellt.<br>
+	 * Falls das angegebene Objekt ein JSONArray ist, wird es über
+	 * {@link #jsonArrayToObject(JSONArray, Class, String, int) jsonArrayToObject} deserialisiert und zurückgegeben,
+	 * ansonsten über {@link #jsonObjectToObject(JSONObject, Class, int) jsonObjectToObject}.
+	 * @param json Das angegebene Objekt aus der JSON-Datei, das deserialisiert werden soll
+	 * @return Ein Java-Objekt, in das das angegebene Objekt deserialisiert wurde
 	 * @throws DeserialiseException Wird geworfen, falls ein Fehler beim Deserialisieren des Objektes
 	 * auftritt.
 	 */
@@ -491,69 +489,9 @@ public class Serialiser {
 			return null;
 		}
 		if (isSimpleType(json.getClass())) {
-			if (String.class == json.getClass()) {
-				String string = (String) json;
-				if (string.isEmpty()) {
-					return string;
-				}
-				if (string.charAt(0) == '@') {
-					if (multiFile && string.contains("#")) {
-						String[] linkInfo = string.substring(1).split("#");
-						String fileName = linkInfo[0];
-						int hash = Integer.parseInt(linkInfo[1]);
-						Object linkedObject = getLinkedFileObject(fileName, hash);
-						if (linkedObject == null) {
-							throw new DeserialiseException("The definition of the linked object " +
-									string + "(" + getCurrentFieldInformation(null) +
-									") could not be found.");
-						}
-						return linkedObject;
-					}
-					int hash = Integer.parseInt(string.substring(1));
-					if (hashTable.containsKey(hash)) {
-						return hashTable.get(hash);
-					}
-					Object linkedObject = getLinkedObject(multiFile ? wholeSeparatedJson : wholeSingleJson, hash);
-					if (linkedObject == null) {
-						throw new DeserialiseException("The definition of the linked object " +
-								string + "(" + getCurrentFieldInformation(null) +
-								") could not be found.");
-					}
-					return linkedObject;
-				}
-				if (string.charAt(0) == '#') {
-					String[] classInfos = string.split("=");
-					String className = classInfos[0].substring(1);
-					String classValue = classInfos[1];
-					if (SpecialClasses.getClassMap().containsKey(className)) {
-						SpecialClasses specialClass = SpecialClasses.getClassMap().get(className);
-						Object result = specialClass.deserialise(classValue);
-						if (result == null) {
-							throw new DeserialiseException(getCurrentFieldInformation(className) +
-									", value: " + classValue + " could not be deserialised.");
-						}
-						return result;
-					}
-					Class<?> objectClass;
-					try {
-						objectClass = Class.forName(className);
-					} catch (ClassNotFoundException e) {
-						throw new DeserialiseException("The specified class " + className + ", used by " +
-								getCurrentFieldInformation(className) + " could not be found.", e);
-					}
-					if (objectClass.isEnum()) {
-						return getNewEnumInstance(classValue, objectClass);
-					}
-					throw new DeserialiseException("The definition of the special class " + className +
-							", used by " + getCurrentFieldInformation(className) + " could not be found.");
-				}
-				if (string.matches("(\\\\)+[@#].*")) {
-					return string.substring(1);
-				}
-				return string;
-			}
-			return json;
+			return simpleTypeToObject(json);
 		}
+
 		String[] classInfos;
 		if (json instanceof JSONArray) {
 			JSONArray jsonArray = (JSONArray) json;
@@ -576,80 +514,233 @@ public class Serialiser {
 		}
 
 		if (json instanceof JSONArray) {
-			JSONArray jsonArray = (JSONArray) json;
-			if (newClass.isArray()) {
-				currentFieldType = FieldType.ARRAY;
-				Object newArray = Array.newInstance(newClass.getComponentType(), jsonArray.length() - 1);
-				hashTable.put(hash, newArray);
-				for (int arrayCreateIterator = 1; arrayCreateIterator < jsonArray.length();
-					 arrayCreateIterator++) {
-					Array.set(newArray, arrayCreateIterator - 1,
-							jsonToObject(jsonArray.get(arrayCreateIterator)));
-				}
-				return newArray;
-			}
-			Object newObject;
-			if (collectionHandling == CollectionHandling.NO_CASTING) {
-				newObject = getNewInstance(newClass);
-			} else {
-				try {
-					newObject = getNewInstance(newClass);
-				} catch (DeserialiseException e) {
-					newObject = getNewAlternativeInstance(newClass, e);
-					if (collectionHandling == CollectionHandling.DEBUG_MODE) {
-						e.printStackTrace();
-					}
-					if (collectionHandling != CollectionHandling.NO_WARNING) {
-						System.out.println("WARNING: Class " + newClass.getName() +
-								" has been converted to class " + newObject.getClass().getName() +
-								". This might lead to a ClassCastException.\nIt is recommended not to use " +
-								"this Collection or Map type (" + newClass.getName() + ")!");
-					}
-					if (collectionHandling == CollectionHandling.CONVERT_WITH_WARNING) {
-						System.out.println("This warning can be suppressed by using the NO_WARNING mode " +
-								"in the constructor of the serialiser.");
-					}
-				}
-			}
-			if (newObject instanceof Collection) {
-				currentFieldType = FieldType.COLLECTION;
-				@SuppressWarnings("unchecked")
-				Collection<Object> newCollection = (Collection<Object>) newObject;
-				hashTable.put(hash, newCollection);
-				for (Object jsonArrayPart : jsonArray.skipFirst()) {
-					newCollection.add(jsonToObject(jsonArrayPart));
-				}
-				return newCollection;
-			}
-			if (newObject instanceof Map) {
-				currentFieldType = FieldType.MAP;
-				@SuppressWarnings("unchecked")
-				Map<Object, Object> newMap = (Map<Object, Object>) newObject;
-				hashTable.put(hash, newMap);
-				for (Object jsonArrayPart : jsonArray.skipFirst()) {
-					JSONObject jsonArrayChild = (JSONObject) jsonArrayPart;
-					Object childKey = jsonToObject(jsonArrayChild.get("key"));
-					Object childValue = jsonToObject(jsonArrayChild.get("value"));
-					newMap.put(childKey, childValue);
-				}
-				return newMap;
-			}
-			throw new DeserialiseException("The specified class " + className + ", used by " +
-					getCurrentFieldInformation(className) + " could not be deserialised as it's neither an " +
-					"array, a collection or a map.");
+			return jsonArrayToObject((JSONArray) json, newClass, className, hash);
 		}
 
-		JSONObject jsonObject = (JSONObject) json;
+		return jsonObjectToObject((JSONObject) json, newClass, hash);
+	}
+
+
+	/**
+	 * Deserialisiert ein simples Objekt (Wrapper-Objekt eines simplen Datentyps oder String) aus der JSON-Datei
+	 * in ein Java-Objekt.<br>
+	 * Dabei werden Wrapper-Objekte direkt zurückgegeben.<br>
+	 * Falls der String mit einem @ anfängt ist er ein kodiertes verlinktes Objekt und wird über
+	 * {{@link #jsonToLinkedObject(String)} jsonToLinkedObject} deserialisiert und zurückgegeben.<br>
+	 * Falls der String mit einem # anfängt ist er ein kodiertes Objekt aus einer {@link SpecialClasses SpecialClass}
+	 * oder ein Enum und wird über {@link #jsonToSpecialClassOrEnum(String) jsonToSpecialClassOrEnum} deserialisiert
+	 * und zurückgegeben.<br>
+	 * Ansonsten wird, falls der String mit einem escapeten @ oder # anfängt, das Escapen rückgängig gemacht und der
+	 * String zurückgegeben.
+	 * @param json Das simple Objekt aus der JSON-Datei, das deserialisiert werden soll
+	 * @return Ein Java-Objekt, in das das angegebene Objekt deserialisiert wurde
+	 * @throws DeserialiseException Wird geworfen, falls ein Fehler beim Deserialisieren des Objektes
+	 * auftritt.
+	 */
+	private Object simpleTypeToObject(Object json) throws DeserialiseException {
+		if (String.class == json.getClass()) {
+			String string = (String) json;
+			if (string.isEmpty()) {
+				return string;
+			}
+			if (string.charAt(0) == '@') {
+				return jsonToLinkedObject(string);
+			}
+			if (string.charAt(0) == '#') {
+				return jsonToSpecialClassOrEnum(string);
+			}
+			if (string.matches("(\\\\)+[@#].*")) {
+				return string.substring(1);
+			}
+			return string;
+		}
+		return json;
+	}
+
+	/**
+	 * Deserialisiert ein als String kodiertes verlinktes Objekt aus der JSON-Datei in das entsprechende
+	 * Java-Objekt.<br>
+	 * Falls das verlinkte Objekt nicht in der aktuellen Datei serialisiert wurde, wird das Objekt über
+	 * {@link #getLinkedFileObject(String, int) getLinkedFileObject} deserialisiert und zurückgegeben.<br>
+	 * Ansonsten wird das Objekt über {@link #getLinkedObject(Object, int) getLinkedObject} deserialisiert und
+	 * zurückgegeben.
+	 * @param string Das als String kodierte verlinkte Objekt aus der JSON-Datei
+	 * @return Das Java-Objekt, in das das angegebene Objekt deserialisiert wurde
+	 * @throws DeserialiseException Wird geworfen, falls ein Fehler beim Deserialisieren des Objektes
+	 * auftritt.
+	 */
+	private Object jsonToLinkedObject(String string) throws DeserialiseException {
+		if (multiFile && string.contains("#")) {
+			String[] linkInfo = string.substring(1).split("#");
+			String fileName = linkInfo[0];
+			int hash = Integer.parseInt(linkInfo[1]);
+			Object linkedObject = getLinkedFileObject(fileName, hash);
+			if (linkedObject == null) {
+				throw new DeserialiseException("The definition of the linked object " +
+						string + "(" + getCurrentFieldInformation(null) +
+						") could not be found.");
+			}
+			return linkedObject;
+		}
+		int hash = Integer.parseInt(string.substring(1));
+		if (hashTable.containsKey(hash)) {
+			return hashTable.get(hash);
+		}
+		Object linkedObject = getLinkedObject(multiFile ? wholeSeparatedJson : wholeSingleJson, hash);
+		if (linkedObject == null) {
+			throw new DeserialiseException("The definition of the linked object " +
+					string + "(" + getCurrentFieldInformation(null) +
+					") could not be found.");
+		}
+		return linkedObject;
+	}
+
+	/**
+	 * Deserialisiert ein als String kodiertes Objekt aus einer {@link SpecialClasses SpecialClass} oder Enum
+	 * aus der JSON-Datei in das entsprechende Java-Objekt.<br>
+	 * Falls der String ein kodiertes Objekt aus einer {@link SpecialClasses SpecialClass} ist, wird die
+	 * Deserialisierungs-Methode der entsprechenden Klasse des Objektes mit dem String aufgerufen und das daraus
+	 * entstandene Objekt zurückgegeben.<br>
+	 * Falls der String ein kodiertes Enum ist, wird eine Instanz des entsprechenden Enum-Wertes erstellt und
+	 * zurückgegeben.
+	 * @param string Das als String kodierte Objekt aus einer {@link SpecialClasses SpecialClass} bzw. Enum aus
+	 *               der JSON-Datei
+	 * @return Das Java-Objekt, in das das angegebene Objekt deserialisiert wurde
+	 * @throws DeserialiseException Wird geworfen, falls ein Fehler beim Deserialisieren des Objektes
+	 * auftritt.
+	 */
+	private Object jsonToSpecialClassOrEnum(String string) throws DeserialiseException {
+		String[] classInfos = string.split("=");
+		String className = classInfos[0].substring(1);
+		String classValue = classInfos[1];
+		if (SpecialClasses.getClassMap().containsKey(className)) {
+			SpecialClasses specialClass = SpecialClasses.getClassMap().get(className);
+			Object result = specialClass.deserialise(classValue);
+			if (result == null) {
+				throw new DeserialiseException(getCurrentFieldInformation(className) +
+						", value: " + classValue + " could not be deserialised.");
+			}
+			return result;
+		}
+		Class<?> objectClass;
+		try {
+			objectClass = Class.forName(className);
+		} catch (ClassNotFoundException e) {
+			throw new DeserialiseException("The specified class " + className + ", used by " +
+					getCurrentFieldInformation(className) + " could not be found.", e);
+		}
+		if (objectClass.isEnum()) {
+			return getNewEnumInstance(classValue, objectClass);
+		}
+		throw new DeserialiseException("The definition of the special class " + className +
+				", used by " + getCurrentFieldInformation(className) + " could not be found.");
+	}
+
+	/**
+	 * Deserialisiert ein JSONArray in das entsprechende Java-Objekt: Ein Array, eine Collection oder eine Map.<br>
+	 * Falls das Objekt ein Array ist, werden die einzelnen Inhalte des JSONArrays
+	 * {@link #jsonToObject(Object) deserialisiert} und einem neuen Array hinzugefügt, das zurückgegeben wird.<br>
+	 * Ansonsten wird eine Instanz der Collection bzw. Map des Objektes erstellt; falls dies nicht möglich ist
+	 * wird eventuell ein {@link #getNewAlternativeInstance(Class, Exception) möglichst ähnlicher}
+	 * Collection- bzw. Map-Typ benutzt und abhängig von der {@link CollectionHandling Konfiguration} eine Warnung
+	 * ausgegeben.<br>
+	 * Wenn das Objekt eine Collection ist, werden alle Inhalte des JSONArrays
+	 * {@link #jsonToObject(Object) deserialisiert} und der Collection-Instanz hinzugefügt, die dann zurückgegeben
+	 * wird. Wenn das Objekt eine Map ist, werden alle keys und values, die je als JSONObject in dem JSONArray
+	 * gespeichert sind {@link #jsonToObject(Object) deserialisiert} und der Map-Instanz hinzugefügt, die dann
+	 * zurückgegeben wird.
+	 * @param jsonArray Das JSONArray, das deserialisiert werden soll
+	 * @param newClass Die Klasse des Objektes, in das deserialisiert werden soll
+	 * @param className Der Name der Klasse des Objektes, in das deserialisiert werden soll
+	 * @param hash Der beim Serialisieren abgefragte Hash des Objektes, in das deserialisiert werden soll
+	 * @return Das Java-Objekt, in das das angegebene JSONArray serialisiert wurde
+	 * @throws DeserialiseException Wird geworfen, falls ein Fehler beim Deserialisieren des Objektes
+	 * auftritt.
+	 */
+	private Object jsonArrayToObject(JSONArray jsonArray, Class<?> newClass, String className, int hash)
+			throws DeserialiseException {
+		if (newClass.isArray()) {
+			currentFieldType = FieldType.ARRAY;
+			Object newArray = Array.newInstance(newClass.getComponentType(), jsonArray.length() - 1);
+			hashTable.put(hash, newArray);
+			for (int arrayCreateIterator = 1; arrayCreateIterator < jsonArray.length();
+				 arrayCreateIterator++) {
+				Array.set(newArray, arrayCreateIterator - 1,
+						jsonToObject(jsonArray.get(arrayCreateIterator)));
+			}
+			return newArray;
+		}
+		Object newObject;
+		if (collectionHandling == CollectionHandling.NO_CASTING) {
+			newObject = getNewInstance(newClass);
+		} else {
+			try {
+				newObject = getNewInstance(newClass);
+			} catch (DeserialiseException e) {
+				newObject = getNewAlternativeInstance(newClass, e);
+				if (collectionHandling == CollectionHandling.DEBUG_MODE) {
+					e.printStackTrace();
+				}
+				if (collectionHandling != CollectionHandling.NO_WARNING) {
+					System.out.println("WARNING: Class " + newClass.getName() +
+							" has been converted to class " + newObject.getClass().getName() +
+							". This might lead to a ClassCastException.\nIt is recommended not to use " +
+							"this Collection or Map type (" + newClass.getName() + ")!");
+				}
+				if (collectionHandling == CollectionHandling.CONVERT_WITH_WARNING) {
+					System.out.println("This warning can be suppressed by using the NO_WARNING mode " +
+							"in the constructor of the serialiser.");
+				}
+			}
+		}
+		if (newObject instanceof Collection) {
+			currentFieldType = FieldType.COLLECTION;
+			@SuppressWarnings("unchecked")
+			Collection<Object> newCollection = (Collection<Object>) newObject;
+			hashTable.put(hash, newCollection);
+			for (Object jsonArrayPart : jsonArray.skipFirst()) {
+				newCollection.add(jsonToObject(jsonArrayPart));
+			}
+			return newCollection;
+		}
+		if (newObject instanceof Map) {
+			currentFieldType = FieldType.MAP;
+			@SuppressWarnings("unchecked")
+			Map<Object, Object> newMap = (Map<Object, Object>) newObject;
+			hashTable.put(hash, newMap);
+			for (Object jsonArrayPart : jsonArray.skipFirst()) {
+				JSONObject jsonArrayChild = (JSONObject) jsonArrayPart;
+				Object childKey = jsonToObject(jsonArrayChild.get("key"));
+				Object childValue = jsonToObject(jsonArrayChild.get("value"));
+				newMap.put(childKey, childValue);
+			}
+			return newMap;
+		}
+		throw new DeserialiseException("The specified class " + className + ", used by " +
+				getCurrentFieldInformation(className) + " could not be deserialised as it's neither an " +
+				"array, a collection or a map.");
+	}
+
+	/**
+	 * Deserialisiert ein JSONObject in das entsprechende Java-Objekt.<br>
+	 * Dafür wird eine neue Instanz der Klasse des Java-Objektes erstellt. Dann wird für jede Variable des Objektes,
+	 * die nicht ignoriert werden soll, das entsprechende JSON-Element aus dem JSONObject
+	 * {@link #jsonToObject(Object) deserialisiert} und das entstandene Java-Objekt als Variablenwert gesetzt.
+	 * @param jsonObject Das JSONObject, das deserialisiert werden soll
+	 * @param newClass Die Klasse des Objektes, in das deserialisiert werden soll
+	 * @param hash Der beim Serialisieren abgefragte Hash des Objektes, in das deserialisiert werden soll
+	 * @return Das Java-Objekt, in das das angegebene JSONObject serialisiert wurde
+	 * @throws DeserialiseException Wird geworfen, falls ein Fehler beim Deserialisieren des Objektes
+	 * auftritt.
+	 */
+	private Object jsonObjectToObject(JSONObject jsonObject, Class<?> newClass, int hash) throws DeserialiseException {
 		Object newObject = getNewInstance(newClass);
 		hashTable.put(hash, newObject);
 
 		while (newClass != null) {
 			for (Field field : newClass.getDeclaredFields()) {
 				field.setAccessible(true);
-				if (field.isAnnotationPresent(SerialiseIgnore.class)) {
-					continue;
-				}
-				if (isStaticFinal(field)) {
+				if (field.isAnnotationPresent(SerialiseIgnore.class) || isStaticFinal(field)) {
 					continue;
 				}
 				currentField = field;
