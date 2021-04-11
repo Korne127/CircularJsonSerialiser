@@ -2,6 +2,7 @@ package de.korne127.circularJsonSerialiser;
 
 import javax.script.Bindings;
 import javax.script.SimpleBindings;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -65,7 +66,9 @@ public class Serialiser {
 	private JSONObject wholeSingleJson;
 	private boolean multiFile;
 
+	//Konfiguration
 	private final CollectionHandling collectionHandling;
+	private final boolean startSerialisingInSuperclass;
 
 	/**
 	 * Enum, das die verschiedenen Optionen, wie sich der Serialiser verhalten soll, wenn
@@ -114,21 +117,27 @@ public class Serialiser {
 	 * Der standardmäßige Konstruktor der Serialiser-Klasse:<br>
 	 * Erstellt einen neuen Serialiser.<br>
 	 * Setzt dabei den Modus, wie Collections behandelt werden auf
-	 * {@link CollectionHandling#CONVERT_WITH_WARNING CONVERT_WITH_WARNING}.
+	 * {@link CollectionHandling#CONVERT_WITH_WARNING CONVERT_WITH_WARNING} und stellt ein, dass zuerst die
+	 * Variablen der Oberklasse serialisiert werden.
 	 */
 	public Serialiser() {
-		this(CollectionHandling.CONVERT_WITH_WARNING);
+		this(CollectionHandling.CONVERT_WITH_WARNING, true);
 	}
 
 	/**
 	 * Ein Konstruktor der Serialiser-Klasse:<br>
 	 * Erstellt einen neuen Serialiser und setzt den Modus, wie Collections behandelt werden auf den
-	 * angegebenen Modus.
+	 * angegebenen Modus sowie die Einstellung, ob zuerst Variablen der Oberklassen oder der eigentlichen Klasse
+	 * serialisiert werden sollen auf die angegebene.
 	 * @param collectionHandling Der angegebene Modus, wie sich der Serialiser verhalten soll, wenn keine
 	 *                           Instanz einer Collection oder Map erstellt werden kann
+	 * @param startSerialisingInSuperclass Die angegebene Einstellung, ob der Serialiser zunächst die Variablen
+	 *                                     der Oberklassen serialisieren soll und dann die der eigentlichen Klasse
+	 *                                     oder umgekehrt
 	 */
-	public Serialiser(CollectionHandling collectionHandling) {
+	public Serialiser(CollectionHandling collectionHandling, boolean startSerialisingInSuperclass) {
 		this.collectionHandling = collectionHandling;
+		this.startSerialisingInSuperclass = startSerialisingInSuperclass;
 	}
 
 
@@ -418,36 +427,29 @@ public class Serialiser {
 			throws SerialiseException {
 		JSONObject jsonObject = new JSONObject();
 		jsonObject.put("class", objectClass.getName() + "=" + objectHash);
-		while (objectClass != null) {
-			for (Field objectField : objectClass.getDeclaredFields()) {
-				objectField.setAccessible(true);
-				if (objectField.isAnnotationPresent(SerialiseIgnore.class) || isStaticFinal(objectField)) {
-					continue;
-				}
-				currentField = objectField;
-				currentFieldType = FieldType.FIELD;
-				Object child;
-				try {
-					child = objectField.get(object);
-				} catch (IllegalAccessException e) {
-					throw new SerialiseException("Fatal error: The field value of " +
-							getCurrentFieldInformation(objectField.getType().getName()) +
-							" could not be retrieved", e);
-				}
-				String currentFileName = getFileName(objectField, child);
-				if (multiFile && parentFileName.equals(currentFileName)) {
-					currentFileName = null;
-				}
-				Object childJson = objectToJson(child, currentFileName == null ? parentFileName : currentFileName);
-				if (!multiFile || childJson == null || currentFileName == null || isSimpleType(childJson.getClass())) {
-					jsonObject.put(objectField.getName(), childJson);
-				} else {
-					int childHash = System.identityHashCode(child);
-					jsonObject.put(objectField.getName(), "@" + currentFileName + "#" + childHash);
-					putInWholeSeparatedJson(currentFileName, childHash, childJson);
-				}
+		for (Field objectField : getSerialiseFields(objectClass, startSerialisingInSuperclass)) {
+			currentField = objectField;
+			currentFieldType = FieldType.FIELD;
+			Object child;
+			try {
+				child = objectField.get(object);
+			} catch (IllegalAccessException e) {
+				throw new SerialiseException("Fatal error: The field value of " +
+						getCurrentFieldInformation(objectField.getType().getName()) +
+						" could not be retrieved", e);
 			}
-			objectClass = objectClass.getSuperclass();
+			String currentFileName = getFileName(objectField, child);
+			if (multiFile && parentFileName.equals(currentFileName)) {
+				currentFileName = null;
+			}
+			Object childJson = objectToJson(child, currentFileName == null ? parentFileName : currentFileName);
+			if (!multiFile || childJson == null || currentFileName == null || isSimpleType(childJson.getClass())) {
+				jsonObject.put(objectField.getName(), childJson);
+			} else {
+				int childHash = System.identityHashCode(child);
+				jsonObject.put(objectField.getName(), "@" + currentFileName + "#" + childHash);
+				putInWholeSeparatedJson(currentFileName, childHash, childJson);
+			}
 		}
 		return jsonObject;
 	}
@@ -789,28 +791,21 @@ public class Serialiser {
 		Object newObject = getNewInstance(newClass);
 		hashTable.put(hash, newObject);
 
-		while (newClass != null) {
-			for (Field field : newClass.getDeclaredFields()) {
-				field.setAccessible(true);
-				if (field.isAnnotationPresent(SerialiseIgnore.class) || isStaticFinal(field)) {
-					continue;
-				}
-				currentField = field;
-				currentFieldType = FieldType.FIELD;
-				Object childJson = jsonObject.get(field.getName());
-				try {
-					field.set(newObject, jsonToObject(childJson));
-				} catch (IllegalArgumentException e) {
-					throw new DeserialiseException("Type Mismatch: " +
-							getCurrentFieldInformation(field.getType().getName()) +
-							" is not equal to JSON-Element child type", e);
-				} catch (IllegalAccessException e) {
-					throw new DeserialiseException("Illegal Access: " +
-							getCurrentFieldInformation(field.getType().getName()) +
-							" could not be overwritten.", e);
-				}
+		for (Field field : getSerialiseFields(newClass, startSerialisingInSuperclass)) {
+			currentField = field;
+			currentFieldType = FieldType.FIELD;
+			Object childJson = jsonObject.get(field.getName());
+			try {
+				field.set(newObject, jsonToObject(childJson));
+			} catch (IllegalArgumentException e) {
+				throw new DeserialiseException("Type Mismatch: " +
+						getCurrentFieldInformation(field.getType().getName()) +
+						" is not equal to JSON-Element child type", e);
+			} catch (IllegalAccessException e) {
+				throw new DeserialiseException("Illegal Access: " +
+						getCurrentFieldInformation(field.getType().getName()) +
+						" could not be overwritten.", e);
 			}
-			newClass = newClass.getSuperclass();
 		}
 
 		return newObject;
@@ -1012,25 +1007,10 @@ public class Serialiser {
 
 		for (Object object : hashTable.values()) {
 			Class<?> objectClass = object.getClass();
-			Class<?> parentClass = objectClass;
 			if (!afterDeserialiseMethods.containsKey(objectClass)) {
-				afterDeserialiseMethods.put(objectClass, new LinkedList<>());
-				Stack<Class<?>> classStack = new Stack<>();
-				while (parentClass != null) {
-					classStack.push(parentClass);
-					parentClass = parentClass.getSuperclass();
-				}
-				while (!classStack.isEmpty()) {
-					parentClass = classStack.pop();
-					for (Method method : parentClass.getDeclaredMethods()) {
-						method.setAccessible(true);
-						if (method.isAnnotationPresent(AfterDeserialise.class)) {
-							afterDeserialiseMethods.get(objectClass).add(method);
-						}
-					}
-				}
+				afterDeserialiseMethods.put(objectClass,
+						getMethodsWithAnnotation(objectClass, AfterDeserialise.class));
 			}
-			objectClass = object.getClass(); //Um Fehlermeldungen zu vermeiden
 			for (Method method : afterDeserialiseMethods.get(objectClass)) {
 				if (method.getParameterCount() > 0) {
 					throw new DeserialiseException("Error: The method " + objectClass.getName() + "#" +
@@ -1162,6 +1142,90 @@ public class Serialiser {
 
 
 	//----STATISCHE HILFSMETHODEN----
+
+	/**
+	 * Hilfsmethode:<br>
+	 * Gibt alle Felder aus der angegebenen Klasse oder einer Oberklasse, die für das (De-)Serialisieren benutzt
+	 * werden können in einer Liste zurück. Die Reihenfolge, ob die Felder aus den Oberklassen zuerst aufgelistet
+	 * werden sollen oder ob die Felder aus der eigentlichen Klasse zuerst aufgelistet werden soll, wird durch
+	 * einen angegebenen boolean bestimmt.
+	 * @param objectClass Die angegebene Klasse, aus der alle Felder, die für das (De-)Serialisieren benutzt werden
+	 *                    können, zurückgegeben werden sollen
+	 * @param startAtTheTop true - Die Felder der höchsten Oberklasse werden zuerst gelistet und die der
+	 *                      eigentlichen Klasse werden als letztes gelistet;<br>
+	 *                      false - Die Felder der eigentlichen Klasse werden zuerst gelistet und die der
+	 *                      höchsten Oberklasse werden als letztes gelistet
+	 * @return Eine Liste mit allen Feldern aus der angegebenen Klasse oder einer Oberklasse, die für das
+	 * (De-)Serialisieren benutzt werden können
+	 */
+	private static List<Field> getSerialiseFields(Class<?> objectClass, boolean startAtTheTop) {
+		List<Field> fieldList = new LinkedList<>();
+		LinkedList<Class<?>> classList = getAllSuperclasses(objectClass, startAtTheTop);
+		while (!classList.isEmpty()) {
+			objectClass = classList.pop();
+			for (Field field : objectClass.getDeclaredFields()) {
+				field.setAccessible(true);
+				if (!field.isAnnotationPresent(SerialiseIgnore.class) && !isStaticFinal(field)) {
+					fieldList.add(field);
+				}
+			}
+		}
+		return fieldList;
+	}
+
+	/**
+	 * Hilfsmethode:<br>
+	 * Gibt alle Methoden aus der angegebenen Klasse oder einer Oberklasse, die mit der bestimmten angegebenen
+	 * Annotation annotiert sind, in einer Liste zurück.
+	 * @param objectClass Die angegebene Klasse, aus der und deren Oberklassen alle Methoden mit der bestimmten
+	 *                    Annotation zurückgegeben werden sollen
+	 * @param annotation Die bestimmte Annotation
+	 * @return Eine Liste mit allen Methoden aus der angegebenen Klasse oder einer Oberklasse, die mit der
+	 * bestimmten angegebenen Annotation annotiert sind
+	 */
+	private static List<Method> getMethodsWithAnnotation(Class<?> objectClass,
+														 Class<? extends Annotation> annotation) {
+		List<Method> methodList = new LinkedList<>();
+		LinkedList<Class<?>> classList = getAllSuperclasses(objectClass, true);
+		while (!classList.isEmpty()) {
+			objectClass = classList.pop();
+			for (Method method : objectClass.getDeclaredMethods()) {
+				method.setAccessible(true);
+				if (method.isAnnotationPresent(annotation)) {
+					methodList.add(method);
+				}
+			}
+		}
+		return methodList;
+	}
+
+	/**
+	 * Hilfsmethode:<br>
+	 * Gibt alle Oberklassen einer angegebenen Klasse (inklusive der angegebenen Klasse selbst) in einer
+	 * Liste zurück. Ein angegebener boolean gibt an, ob in der zurückgegebenen Liste die oberste Klasse
+	 * oder die unterste Klasse das erste Element ist.
+	 * @param objectClass Die angegebene Klasse, für die alle Oberklassen zurückgegeben werden solle
+	 * @param startAtTheTop true - Die oberste Klasse ist das erste Element der Liste und die eigentliche Klasse
+	 *                      das letzte Element der Liste;<br>
+	 *                      false - Die eigentliche Klasse ist das erste Element der Liste und die oberste Klasse
+	 *                      das letzte Element der Liste
+	 * @return Eine Liste mit allen Oberklassen einer angegebenen Klasse (inklusive der angegebenen Klasse selbst)
+	 */
+	private static LinkedList<Class<?>> getAllSuperclasses(Class<?> objectClass, boolean startAtTheTop) {
+		LinkedList<Class<?>> classList = new LinkedList<>();
+		if (startAtTheTop) {
+			while (objectClass != null) {
+				classList.addFirst(objectClass);
+				objectClass = objectClass.getSuperclass();
+			}
+		} else {
+			while (objectClass != null) {
+				classList.addLast(objectClass);
+				objectClass = objectClass.getSuperclass();
+			}
+		}
+		return classList;
+	}
 
 	/**
 	 * Hilfsmethode:<br>
