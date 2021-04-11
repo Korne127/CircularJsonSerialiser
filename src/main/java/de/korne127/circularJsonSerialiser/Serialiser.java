@@ -22,6 +22,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
+import java.util.Stack;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingDeque;
@@ -35,6 +36,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.TransferQueue;
 
+import de.korne127.circularJsonSerialiser.annotations.AfterDeserialise;
 import de.korne127.circularJsonSerialiser.annotations.BeforeSerialise;
 import de.korne127.circularJsonSerialiser.annotations.SerialiseFile;
 import de.korne127.circularJsonSerialiser.annotations.SerialiseIgnore;
@@ -467,13 +469,15 @@ public class Serialiser {
 	 * des Objektes aufgetreten ist.
 	 */
 	public Object deserialiseObject(String content) throws JsonParseException, DeserialiseException {
-		hashTable = new HashMap<>();
+		hashTable = new LinkedHashMap<>();
 		currentField = null;
 		currentFieldType = null;
 		wholeSingleJson = new JSONObject(content);
 		multiFile = false;
 
-		return jsonToObject(wholeSingleJson);
+		Object result = jsonToObject(wholeSingleJson);
+		executeAfterDeserialiseMethods();
+		return result;
 	}
 
 	/**
@@ -494,7 +498,7 @@ public class Serialiser {
 	 */
 	public Object deserialiseSeparatedObject(Map<String, String> content)
 			throws JsonParseException, DeserialiseException {
-		hashTable = new HashMap<>();
+		hashTable = new LinkedHashMap<>();
 		currentField = null;
 		currentFieldType = null;
 		wholeSeparatedJson = new HashMap<>();
@@ -505,7 +509,9 @@ public class Serialiser {
 
 		for (String key : wholeSeparatedJson.keySet()) {
 			if (wholeSeparatedJson.get(key).containsKey("Main")) {
-				return jsonToObject(wholeSeparatedJson.get(key).get("Main"));
+				Object result = jsonToObject(wholeSeparatedJson.get(key).get("Main"));
+				executeAfterDeserialiseMethods();
+				return result;
 			}
 		}
 		throw new DeserialiseException("The main object to deserialise could not be found.");
@@ -989,6 +995,57 @@ public class Serialiser {
 			JSONObject newObject = new JSONObject();
 			newObject.put(String.valueOf(childHash), childObject);
 			wholeSeparatedJson.put(fileName, newObject);
+		}
+	}
+
+	/**
+	 * Führt alle Methoden, die mit der {@link AfterDeserialise} Annotation annotiert wurden, aus.<br>
+	 * Es wird die komplette Hashtabelle mit allen Objekten, die deserialisiert wurden (in der Reihenfolge
+	 * einer Tiefensuche) durchgegangen. Dabei wird für jedes Objekt geprüft, welche Methoden aus der
+	 * entsprechenden Klasse und allen Oberklassen mit der Annotation versehen sind und die entsprechenden
+	 * Methoden werden (von der allgemeinsten Klasse beginnend aus) ausgeführt.
+	 * @throws DeserialiseException Wird geworfen, falls ein Fehler beim Deserialisieren des Objektes
+	 * auftritt.
+	 */
+	private void executeAfterDeserialiseMethods() throws DeserialiseException {
+		Map<Class<?>, List<Method>> afterDeserialiseMethods = new HashMap<>();
+
+		for (Object object : hashTable.values()) {
+			Class<?> objectClass = object.getClass();
+			Class<?> parentClass = objectClass;
+			if (!afterDeserialiseMethods.containsKey(objectClass)) {
+				afterDeserialiseMethods.put(objectClass, new LinkedList<>());
+				Stack<Class<?>> classStack = new Stack<>();
+				while (parentClass != null) {
+					classStack.push(parentClass);
+					parentClass = parentClass.getSuperclass();
+				}
+				while (!classStack.isEmpty()) {
+					parentClass = classStack.pop();
+					for (Method method : parentClass.getDeclaredMethods()) {
+						method.setAccessible(true);
+						if (method.isAnnotationPresent(AfterDeserialise.class)) {
+							afterDeserialiseMethods.get(objectClass).add(method);
+						}
+					}
+				}
+			}
+			objectClass = object.getClass(); //Um Fehlermeldungen zu vermeiden
+			for (Method method : afterDeserialiseMethods.get(objectClass)) {
+				if (method.getParameterCount() > 0) {
+					throw new DeserialiseException("Error: The method " + objectClass.getName() + "#" +
+							method.getName() + " is annotated with the AfterDeserialise annotation but " +
+							"requires parameters.\nMethods annotated with the AfterDeserialise annotation can't " +
+							"use parameters.");
+				}
+				try {
+					method.invoke(object);
+				} catch (IllegalAccessException | InvocationTargetException e) {
+					throw new DeserialiseException("Error: The method " + objectClass.getName() + "#" +
+							method.getName() + " is annotated with the AfterDeserialise annotation but " +
+							"could not be invoked.", e);
+				}
+			}
 		}
 	}
 
