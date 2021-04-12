@@ -41,6 +41,7 @@ import de.korne127.circularJsonSerialiser.annotations.AfterDeserialise;
 import de.korne127.circularJsonSerialiser.annotations.BeforeSerialise;
 import de.korne127.circularJsonSerialiser.annotations.SerialiseFile;
 import de.korne127.circularJsonSerialiser.annotations.SerialiseIgnore;
+import de.korne127.circularJsonSerialiser.annotations.Setter;
 import de.korne127.circularJsonSerialiser.exceptions.DeserialiseException;
 import de.korne127.circularJsonSerialiser.exceptions.JsonParseException;
 import de.korne127.circularJsonSerialiser.exceptions.SerialiseException;
@@ -145,7 +146,14 @@ public class Serialiser {
 		methodParameters = new HashMap<>();
 	}
 
-	public void setMethodParameters(Map<String, Object> methodParameters) {
+	/**
+	 * Nimmt die Map an, die ParameterIDs zu Objekten abbildet und überschreibt sie.<br>
+	 * Diese wird genutzt, um Objekte als Parameter an Methoden, die die {@link AfterDeserialise} oder
+	 * {@link BeforeSerialise} Annotation besitzen, anzugeben oder Variablen, die die {@link Setter} Annotation
+	 * besitzen, zu überschreiben.
+	 * @param methodParameters Die Map, die ParameterIDs zu Objekten abbildet
+	 */
+	public void setParameters(Map<String, Object> methodParameters) {
 		this.methodParameters = methodParameters;
 	}
 
@@ -420,7 +428,7 @@ public class Serialiser {
 			throws SerialiseException {
 		JSONObject jsonObject = new JSONObject();
 		jsonObject.put("class", objectClass.getName() + "=" + objectHash);
-		for (Field objectField : getSerialiseFields(objectClass, startSerialisingInSuperclass)) {
+		for (Field objectField : getSerialiseFields(objectClass, startSerialisingInSuperclass, false)) {
 			currentField = objectField;
 			currentFieldType = FieldType.FIELD;
 			Object child;
@@ -522,7 +530,9 @@ public class Serialiser {
 	 * Falls das Objekt mit diesem Hash bereits deserialisiert wurde, wird es zurückgegeben.<br>
 	 * Falls das angegebene Objekt ein JSONArray ist, wird es über
 	 * {@link #jsonArrayToObject(JSONArray, Class, String, int) jsonArrayToObject} deserialisiert und zurückgegeben,
-	 * ansonsten über {@link #jsonObjectToObject(JSONObject, Class, int) jsonObjectToObject}.
+	 * ansonsten über {@link #jsonObjectToObject(JSONObject, Class, int) jsonObjectToObject}.<br>
+	 * Zusätzlich werden Variablen des Objektes, die mit der {@link Setter} Annotation annotiert sind, auf das
+	 * mit der ParameterID verknüpfte Objekt gesetzt.
 	 * @param json Das angegebene Objekt aus der JSON-Datei, das deserialisiert werden soll
 	 * @return Ein Java-Objekt, in das das angegebene Objekt deserialisiert wurde
 	 * @throws DeserialiseException Wird geworfen, falls ein Fehler beim Deserialisieren des Objektes
@@ -557,11 +567,31 @@ public class Serialiser {
 					getCurrentFieldInformation(className) + " could not be found.", e);
 		}
 
+		Object result;
 		if (json instanceof JSONArray) {
-			return jsonArrayToObject((JSONArray) json, newClass, className, hash);
+			result = jsonArrayToObject((JSONArray) json, newClass, className, hash);
+		} else {
+			result = jsonObjectToObject((JSONObject) json, newClass, hash);
 		}
 
-		return jsonObjectToObject((JSONObject) json, newClass, hash);
+		for (Field field : getSerialiseFields(newClass, true, true)) {
+			String parameterID = field.getDeclaredAnnotation(Setter.class).value();
+			String fieldClassName = field.getDeclaringClass().getName();
+			if (!methodParameters.containsKey(parameterID)) {
+				throw new DeserialiseException("Error: The field " + fieldClassName + "#" +
+						field.getName() + " is annotated with the Setter annotation and " +
+						"requires a parameter but there has not been set a value for the " +
+						"parameterID: " + parameterID);
+			}
+			try {
+				field.set(result, methodParameters.get(parameterID));
+			} catch (IllegalAccessException | IllegalArgumentException e) {
+				throw new DeserialiseException("Error: The field " + fieldClassName + "#" +
+						field.getName() + " is annotated with the Setter annotation but " +
+						"could not be set.", e);
+			}
+		}
+		return result;
 	}
 
 
@@ -784,7 +814,7 @@ public class Serialiser {
 		Object newObject = getNewInstance(newClass);
 		hashTable.put(hash, newObject);
 
-		for (Field field : getSerialiseFields(newClass, startSerialisingInSuperclass)) {
+		for (Field field : getSerialiseFields(newClass, startSerialisingInSuperclass, false)) {
 			currentField = field;
 			currentFieldType = FieldType.FIELD;
 			Object childJson = jsonObject.get(field.getName());
@@ -1021,8 +1051,9 @@ public class Serialiser {
 		}
 
 		for (Method objectMethod : beforeSerialiseMethods.get(objectClass)) {
+			String methodClassName = objectMethod.getDeclaringClass().getName();
 			if (objectMethod.getParameterCount() > 1) {
-				throw new SerialiseException("Error: The method " + objectClass.getName() + "#" +
+				throw new SerialiseException("Error: The method " + methodClassName + "#" +
 						objectMethod.getName() + " is annotated with the BeforeSerialise annotation but " +
 						"requires more than one parameter.\nMethods annotated with the BeforeSerialise " +
 						"annotation can't use more than one parameter.");
@@ -1031,17 +1062,17 @@ public class Serialiser {
 				if (objectMethod.getParameterCount() == 1) {
 					String methodParameterID = objectMethod.getDeclaredAnnotation(BeforeSerialise.class).value();
 					if (!methodParameters.containsKey(methodParameterID)) {
-						throw new SerialiseException("Error: The method" + objectClass.getName() + "#" +
+						throw new SerialiseException("Error: The method " + methodClassName + "#" +
 								objectMethod.getName() + " is annotated with the BeforeSerialise annotation and " +
-								"requires a parameter but there has not been set a value for the method " +
+								"requires a parameter but there has not been set a value for the " +
 								"parameterID: " + methodParameterID);
 					}
 					objectMethod.invoke(object, methodParameters.get(methodParameterID));
 				} else {
 					objectMethod.invoke(object);
 				}
-			} catch (IllegalAccessException | InvocationTargetException e) {
-				throw new SerialiseException("Error: The method " + objectClass.getName() + "#" +
+			} catch (IllegalAccessException | InvocationTargetException | IllegalArgumentException e) {
+				throw new SerialiseException("Error: The method " + methodClassName + "#" +
 						objectMethod.getName() + " is annotated with the BeforeSerialise annotation but " +
 						"could not be invoked.", e);
 			}
@@ -1073,7 +1104,7 @@ public class Serialiser {
 			}
 			return beforeSerialiseMethods;
 		}
-		for (Field field : getSerialiseFields(objectClass, startSerialisingInSuperclass)) {
+		for (Field field : getSerialiseFields(objectClass, startSerialisingInSuperclass, false)) {
 			currentField = field;
 			currentFieldType = FieldType.FIELD;
 			Object child;
@@ -1107,8 +1138,9 @@ public class Serialiser {
 						getMethodsWithAnnotation(objectClass, AfterDeserialise.class));
 			}
 			for (Method method : afterDeserialiseMethods.get(objectClass)) {
+				String methodClassName = method.getDeclaringClass().getName();
 				if (method.getParameterCount() > 1) {
-					throw new DeserialiseException("Error: The method " + objectClass.getName() + "#" +
+					throw new DeserialiseException("Error: The method " + methodClassName + "#" +
 							method.getName() + " is annotated with the AfterDeserialise annotation but " +
 							"requires more than one parameter.\nMethods annotated with the AfterDeserialise " +
 							"annotation can't use more than one parameter.");
@@ -1117,17 +1149,17 @@ public class Serialiser {
 					if (method.getParameterCount() == 1) {
 						String methodParameterID = method.getDeclaredAnnotation(AfterDeserialise.class).value();
 						if (!methodParameters.containsKey(methodParameterID)) {
-							throw new DeserialiseException("Error: The method" + objectClass.getName() + "#" +
+							throw new DeserialiseException("Error: The method " + methodClassName + "#" +
 									method.getName() + " is annotated with the AfterDeserialise annotation and " +
-									"requires a parameter but there has not been set a value for the method " +
+									"requires a parameter but there has not been set a value for the " +
 									"parameterID: " + methodParameterID);
 						}
 						method.invoke(object, methodParameters.get(methodParameterID));
 					} else {
 						method.invoke(object);
 					}
-				} catch (IllegalAccessException | InvocationTargetException e) {
-					throw new DeserialiseException("Error: The method " + objectClass.getName() + "#" +
+				} catch (IllegalAccessException | InvocationTargetException | IllegalArgumentException e) {
+					throw new DeserialiseException("Error: The method " + methodClassName + "#" +
 							method.getName() + " is annotated with the AfterDeserialise annotation but " +
 							"could not be invoked.", e);
 				}
@@ -1251,10 +1283,11 @@ public class Serialiser {
 
 	/**
 	 * Hilfsmethode:<br>
-	 * Gibt alle Felder aus der angegebenen Klasse oder einer Oberklasse, die für das (De-)Serialisieren benutzt
-	 * werden können in einer Liste zurück. Die Reihenfolge, ob die Felder aus den Oberklassen zuerst aufgelistet
-	 * werden sollen oder ob die Felder aus der eigentlichen Klasse zuerst aufgelistet werden soll, wird durch
-	 * einen angegebenen boolean bestimmt.
+	 * Gibt Felder aus der angegebenen Klasse oder einer Oberklasse in einer Liste zurück. Wenn onlySetterFields
+	 * true ist, werden nur die entsprechenden Felder, die eine {@link Setter} Annotation besitzen, zurückgegeben;
+	 * bei false werden alle Felder, die für das (De-)Serialisieren benutzt werden sollen, zurückgegeben.<br>
+	 * Die Reihenfolge, ob die Felder aus den Oberklassen zuerst aufgelistet werden sollen oder ob die Felder
+	 * aus der eigentlichen Klasse zuerst aufgelistet werden soll, wird durch einen angegebenen boolean bestimmt.
 	 * @param objectClass Die angegebene Klasse, aus der alle Felder, die für das (De-)Serialisieren benutzt werden
 	 *                    können, zurückgegeben werden sollen
 	 * @param startAtTheTop true - Die Felder der höchsten Oberklasse werden zuerst gelistet und die der
@@ -1264,14 +1297,17 @@ public class Serialiser {
 	 * @return Eine Liste mit allen Feldern aus der angegebenen Klasse oder einer Oberklasse, die für das
 	 * (De-)Serialisieren benutzt werden können
 	 */
-	private static List<Field> getSerialiseFields(Class<?> objectClass, boolean startAtTheTop) {
+	private static List<Field> getSerialiseFields(Class<?> objectClass, boolean startAtTheTop,
+												  boolean onlySetterFields) {
 		List<Field> fieldList = new LinkedList<>();
 		LinkedList<Class<?>> classList = getAllSuperclasses(objectClass, startAtTheTop);
 		while (!classList.isEmpty()) {
 			objectClass = classList.pop();
 			for (Field field : objectClass.getDeclaredFields()) {
 				field.setAccessible(true);
-				if (!field.isAnnotationPresent(SerialiseIgnore.class) && !isStaticFinal(field)) {
+				if (!isStaticFinal(field) &&
+						(!onlySetterFields && !field.isAnnotationPresent(SerialiseIgnore.class) ||
+						onlySetterFields && field.isAnnotationPresent(Setter.class))) {
 					fieldList.add(field);
 				}
 			}
