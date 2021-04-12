@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
@@ -23,7 +24,6 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
-import java.util.Stack;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingDeque;
@@ -57,6 +57,9 @@ import de.korne127.circularJsonSerialiser.json.JSONObject;
 public class Serialiser {
 
 	private Map<Integer, Object> hashTable;
+
+	//Für BeforeSerialise-Annotations
+	private Set<Integer> beforeSerialised;
 
 	//Für Fehlermeldungen
 	private Field currentField;
@@ -159,7 +162,9 @@ public class Serialiser {
 		currentField = null;
 		currentFieldType = null;
 		multiFile = false;
+		beforeSerialised = new HashSet<>();
 
+		executeBeforeSerialiseMethods(object, new HashMap<>());
 		return objectToJson(object, null).toString();
 	}
 
@@ -185,12 +190,14 @@ public class Serialiser {
 		currentFieldType = null;
 		wholeSeparatedJson = new HashMap<>();
 		multiFile = true;
+		beforeSerialised = new HashSet<>();
 
 		String mainFileName = getFileName(object);
 		if (mainFileName == null) {
 			mainFileName = "Standard";
 		}
 
+		executeBeforeSerialiseMethods(object, new HashMap<>());
 		Object mainObject = objectToJson(object, mainFileName);
 
 		if (wholeSeparatedJson.containsKey(mainFileName)) {
@@ -245,25 +252,6 @@ public class Serialiser {
 			return "@" + objectHash;
 		}
 		hashTable.put(objectHash, object);
-
-		for (Method objectMethod : objectClass.getDeclaredMethods()) {
-			objectMethod.setAccessible(true);
-			if (objectMethod.isAnnotationPresent(BeforeSerialise.class)) {
-				if (objectMethod.getParameterCount() > 0) {
-					throw new SerialiseException("Error: The method " + objectClass.getName() + "#" +
-							objectMethod.getName() + " is annotated with the BeforeSerialise annotation but " +
-							"requires parameters.\nMethods annotated with the BeforeSerialise annotation can't " +
-							"use parameters.");
-				}
-				try {
-					objectMethod.invoke(object);
-				} catch (IllegalAccessException | InvocationTargetException e) {
-					throw new SerialiseException("Error: The method " + objectClass.getName() + "#" +
-							objectMethod.getName() + " is annotated with the BeforeSerialise annotation but " +
-							"could not be invoked.", e);
-				}
-			}
-		}
 
 		if (objectClass.isArray() || object instanceof Collection) {
 			return collectionToJson(object, objectClass, objectHash, parentFileName);
@@ -991,6 +979,97 @@ public class Serialiser {
 			newObject.put(String.valueOf(childHash), childObject);
 			wholeSeparatedJson.put(fileName, newObject);
 		}
+	}
+
+	/**
+	 * Führt alle Methoden, die mit der {@link BeforeSerialise} Annotation annotiert wurde, aus.<br>
+	 * Es wird das Objekt, für das und für alle von ihm verlinkten Objekte alle annotierten Methoden
+	 * ausgeführt werden sollen, sowie eine Map, die für Klassen speichert, welche Methoden für diese Klasse
+	 * sowie alle Oberklassen annotiert sind (sodass die Prüfung nicht mehrmals durchgeführt werden muss).<br>
+	 * Sofern diese Methode für dieses Objekt noch nicht aufgerufen wurde, werden werden alle Methoden des
+	 * Objektes geprüft und, falls annotiert ausgeführt. Danach wird diese Methode für alle verlinkten Objekte
+	 * aufgerufen.
+	 * @param object Das Objekt, für das und für alle von ihm verlinkten Objekte alle annotierten Methoden
+	 *               ausgeführt werden sollen
+	 * @param beforeSerialiseMethods Eine Map, die für Klassen speichert, welche Methoden für diese Klasse
+	 *                               sowie alle Oberklassen annotiert sind
+	 * @return Die aktualisierte Map, die für Klassen speichert, welche Methoden für diese Klasse sowie
+	 * alle Oberklassen annotiert sind
+	 * @throws SerialiseException Wird geworfen, falls ein Fehler beim Serialisieren des Objektes auftritt.
+	 */
+	private Map<Class<?>, List<Method>> executeBeforeSerialiseMethods(Object object,
+				Map<Class<?>, List<Method>> beforeSerialiseMethods) throws SerialiseException {
+		if (object == null) {
+			return beforeSerialiseMethods;
+		}
+		int hash = System.identityHashCode(object);
+		Class<?> objectClass = object.getClass();
+		if (isSimpleType(objectClass) || beforeSerialised.contains(hash) || objectClass.isEnum() ||
+				SpecialClasses.getClassMap().containsKey(objectClass.getName())) {
+			return beforeSerialiseMethods;
+		} else {
+			beforeSerialised.add(hash);
+		}
+
+		if (!beforeSerialiseMethods.containsKey(objectClass)) {
+			beforeSerialiseMethods.put(objectClass, getMethodsWithAnnotation(objectClass, BeforeSerialise.class));
+		}
+
+		for (Method objectMethod : beforeSerialiseMethods.get(objectClass)) {
+			if (objectMethod.getParameterCount() > 0) {
+				throw new SerialiseException("Error: The method " + objectClass.getName() + "#" +
+						objectMethod.getName() + " is annotated with the BeforeSerialise annotation but " +
+						"requires parameters.\nMethods annotated with the BeforeSerialise annotation can't " +
+						"use parameters.");
+			}
+			try {
+				objectMethod.invoke(object);
+			} catch (IllegalAccessException | InvocationTargetException e) {
+				throw new SerialiseException("Error: The method " + objectClass.getName() + "#" +
+						objectMethod.getName() + " is annotated with the BeforeSerialise annotation but " +
+						"could not be invoked.", e);
+			}
+		}
+
+		if (object instanceof Collection) {
+			for (Object child : (Collection<?>) object) {
+				beforeSerialiseMethods = executeBeforeSerialiseMethods(child, beforeSerialiseMethods);
+			}
+			return beforeSerialiseMethods;
+		}
+		if (objectClass.isArray()) {
+			Object[] objectArray;
+			if (objectClass.getComponentType().isPrimitive()) {
+				objectArray = convertPrimitiveToArray(object);
+			} else {
+				objectArray = (Object[]) object;
+			}
+			for (Object child : objectArray) {
+				beforeSerialiseMethods = executeBeforeSerialiseMethods(child, beforeSerialiseMethods);
+			}
+			return beforeSerialiseMethods;
+		}
+		if (object instanceof Map) {
+			for (Object childKey : ((Map<?, ?>) object).keySet()) {
+				Object childValue = ((Map<?, ?>) object).get(childKey);
+				beforeSerialiseMethods = executeBeforeSerialiseMethods(childKey, beforeSerialiseMethods);
+				beforeSerialiseMethods = executeBeforeSerialiseMethods(childValue, beforeSerialiseMethods);
+			}
+			return beforeSerialiseMethods;
+		}
+		for (Field field : getSerialiseFields(objectClass, startSerialisingInSuperclass)) {
+			currentField = field;
+			currentFieldType = FieldType.FIELD;
+			Object child;
+			try {
+				child = field.get(object);
+			} catch (IllegalAccessException e) {
+				throw new SerialiseException("Fatal error: The field value of " +
+						getCurrentFieldInformation(field.getType().getName()) + " could not be retrieved", e);
+			}
+			beforeSerialiseMethods = executeBeforeSerialiseMethods(child, beforeSerialiseMethods);
+		}
+		return beforeSerialiseMethods;
 	}
 
 	/**
