@@ -72,6 +72,7 @@ public class Serialiser {
 	//Konfiguration
 	private final CollectionHandling collectionHandling;
 	private final boolean startSerialisingInSuperclass;
+	private Map<String, Object> methodParameters;
 
 	/**
 	 * Enum, das die verschiedenen Optionen, wie sich der Serialiser verhalten soll, wenn
@@ -141,8 +142,12 @@ public class Serialiser {
 	public Serialiser(CollectionHandling collectionHandling, boolean startSerialisingInSuperclass) {
 		this.collectionHandling = collectionHandling;
 		this.startSerialisingInSuperclass = startSerialisingInSuperclass;
+		methodParameters = new HashMap<>();
 	}
 
+	public void setMethodParameters(Map<String, Object> methodParameters) {
+		this.methodParameters = methodParameters;
+	}
 
 	//----SERIALISE METHODEN----
 
@@ -1016,14 +1021,25 @@ public class Serialiser {
 		}
 
 		for (Method objectMethod : beforeSerialiseMethods.get(objectClass)) {
-			if (objectMethod.getParameterCount() > 0) {
+			if (objectMethod.getParameterCount() > 1) {
 				throw new SerialiseException("Error: The method " + objectClass.getName() + "#" +
 						objectMethod.getName() + " is annotated with the BeforeSerialise annotation but " +
-						"requires parameters.\nMethods annotated with the BeforeSerialise annotation can't " +
-						"use parameters.");
+						"requires more than one parameter.\nMethods annotated with the BeforeSerialise " +
+						"annotation can't use more than one parameter.");
 			}
 			try {
-				objectMethod.invoke(object);
+				if (objectMethod.getParameterCount() == 1) {
+					String methodParameterID = objectMethod.getDeclaredAnnotation(BeforeSerialise.class).value();
+					if (!methodParameters.containsKey(methodParameterID)) {
+						throw new SerialiseException("Error: The method" + objectClass.getName() + "#" +
+								objectMethod.getName() + " is annotated with the BeforeSerialise annotation and " +
+								"requires a parameter but there has not been set a value for the method " +
+								"parameterID: " + methodParameterID);
+					}
+					objectMethod.invoke(object, methodParameters.get(methodParameterID));
+				} else {
+					objectMethod.invoke(object);
+				}
 			} catch (IllegalAccessException | InvocationTargetException e) {
 				throw new SerialiseException("Error: The method " + objectClass.getName() + "#" +
 						objectMethod.getName() + " is annotated with the BeforeSerialise annotation but " +
@@ -1091,14 +1107,25 @@ public class Serialiser {
 						getMethodsWithAnnotation(objectClass, AfterDeserialise.class));
 			}
 			for (Method method : afterDeserialiseMethods.get(objectClass)) {
-				if (method.getParameterCount() > 0) {
+				if (method.getParameterCount() > 1) {
 					throw new DeserialiseException("Error: The method " + objectClass.getName() + "#" +
 							method.getName() + " is annotated with the AfterDeserialise annotation but " +
-							"requires parameters.\nMethods annotated with the AfterDeserialise annotation can't " +
-							"use parameters.");
+							"requires more than one parameter.\nMethods annotated with the AfterDeserialise " +
+							"annotation can't use more than one parameter.");
 				}
 				try {
-					method.invoke(object);
+					if (method.getParameterCount() == 1) {
+						String methodParameterID = method.getDeclaredAnnotation(AfterDeserialise.class).value();
+						if (!methodParameters.containsKey(methodParameterID)) {
+							throw new DeserialiseException("Error: The method" + objectClass.getName() + "#" +
+									method.getName() + " is annotated with the AfterDeserialise annotation and " +
+									"requires a parameter but there has not been set a value for the method " +
+									"parameterID: " + methodParameterID);
+						}
+						method.invoke(object, methodParameters.get(methodParameterID));
+					} else {
+						method.invoke(object);
+					}
 				} catch (IllegalAccessException | InvocationTargetException e) {
 					throw new DeserialiseException("Error: The method " + objectClass.getName() + "#" +
 							method.getName() + " is annotated with the AfterDeserialise annotation but " +
