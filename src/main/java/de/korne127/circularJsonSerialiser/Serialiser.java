@@ -1283,7 +1283,7 @@ public class Serialiser {
 
 	/**
 	 * Hilfsmethode:<br>
-	 * Gibt Felder aus der angegebenen Klasse oder einer Oberklasse in einer Liste zurück. Wenn onlySetterFields
+	 * Gibt Felder aus der angegebenen Klasse und aller Oberklassen in einer Liste zurück. Wenn onlySetterFields
 	 * true ist, werden nur die entsprechenden Felder, die eine {@link Setter} Annotation besitzen, zurückgegeben;
 	 * bei false werden alle Felder, die für das (De-)Serialisieren benutzt werden sollen, zurückgegeben.<br>
 	 * Die Reihenfolge, ob die Felder aus den Oberklassen zuerst aufgelistet werden sollen oder ob die Felder
@@ -1294,7 +1294,7 @@ public class Serialiser {
 	 *                      eigentlichen Klasse werden als letztes gelistet;<br>
 	 *                      false - Die Felder der eigentlichen Klasse werden zuerst gelistet und die der
 	 *                      höchsten Oberklasse werden als letztes gelistet
-	 * @return Eine Liste mit allen Feldern aus der angegebenen Klasse oder einer Oberklasse, die für das
+	 * @return Eine Liste mit allen Feldern aus der angegebenen Klasse und aller Oberklassen, die für das
 	 * (De-)Serialisieren benutzt werden können
 	 */
 	private static List<Field> getSerialiseFields(Class<?> objectClass, boolean startAtTheTop,
@@ -1317,12 +1317,12 @@ public class Serialiser {
 
 	/**
 	 * Hilfsmethode:<br>
-	 * Gibt alle Methoden aus der angegebenen Klasse oder einer Oberklasse, die mit der bestimmten angegebenen
+	 * Gibt alle Methoden aus der angegebenen Klasse und aller Oberklassen, die mit der bestimmten angegebenen
 	 * Annotation annotiert sind, in einer Liste zurück.
 	 * @param objectClass Die angegebene Klasse, aus der und deren Oberklassen alle Methoden mit der bestimmten
 	 *                    Annotation zurückgegeben werden sollen
 	 * @param annotation Die bestimmte Annotation
-	 * @return Eine Liste mit allen Methoden aus der angegebenen Klasse oder einer Oberklasse, die mit der
+	 * @return Eine Liste mit allen Methoden aus der angegebenen Klasse und aller Oberklassen, die mit der
 	 * bestimmten angegebenen Annotation annotiert sind
 	 */
 	private static List<Method> getMethodsWithAnnotation(Class<?> objectClass,
