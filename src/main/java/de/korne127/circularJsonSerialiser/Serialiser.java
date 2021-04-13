@@ -46,6 +46,7 @@ import de.korne127.circularJsonSerialiser.exceptions.DeserialiseException;
 import de.korne127.circularJsonSerialiser.exceptions.JsonParseException;
 import de.korne127.circularJsonSerialiser.exceptions.SerialiseException;
 import de.korne127.circularJsonSerialiser.json.JSONArray;
+import de.korne127.circularJsonSerialiser.json.JSONElement;
 import de.korne127.circularJsonSerialiser.json.JSONObject;
 
 /**
@@ -67,7 +68,7 @@ public class Serialiser {
 	private FieldType currentFieldType;
 
 	private Map<String, JSONObject> wholeSeparatedJson;
-	private JSONObject wholeSingleJson;
+	private JSONElement wholeSingleJson;
 	private boolean multiFile;
 
 	//Konfiguration
@@ -475,7 +476,11 @@ public class Serialiser {
 		hashTable = new LinkedHashMap<>();
 		currentField = null;
 		currentFieldType = null;
-		wholeSingleJson = new JSONObject(content);
+		if (content.charAt(0) == '[') {
+			wholeSingleJson = new JSONArray(content);
+		} else {
+			wholeSingleJson = new JSONObject(content);
+		}
 		multiFile = false;
 
 		Object result = jsonToObject(wholeSingleJson);

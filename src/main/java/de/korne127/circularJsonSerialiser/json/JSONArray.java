@@ -5,6 +5,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import de.korne127.circularJsonSerialiser.exceptions.DeserialiseException;
+import de.korne127.circularJsonSerialiser.exceptions.JsonParseException;
 
 /**
  * JSONArray-Klasse:<br>
@@ -39,6 +40,19 @@ public class JSONArray implements JSONElement {
 	 */
 	public void put(Object object) {
 		list.add(object);
+	}
+
+	/**
+	 * Ein Konstruktor der Klasse:<br>
+	 * Er benutzt den {@link JSONReader} um einen JSON-String in ein JSON-Array umzuwandeln
+	 * und setzt die Liste auf die Liste dieses Objektes.
+	 * @param content Der angegebene JSON-String
+	 * @throws JsonParseException Wird geworfen, falls das JSON-Array aus dem JSON-String nicht
+	 * geparst werden konnte.
+	 */
+	public JSONArray(String content) throws JsonParseException {
+		content = content.replaceAll("[\\n\\t]", "");
+		list = ((JSONArray) JSONReader.readElement(content, false, 0).getValue()).list;
 	}
 
 	/**

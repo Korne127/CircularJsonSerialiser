@@ -8,7 +8,7 @@ import de.korne127.circularJsonSerialiser.Serialiser;
  * Es stellt mehrere Methoden bereit, die von beiden dieser Klasse benutzt werden.
  * @author Korne127
  */
-interface JSONElement {
+public interface JSONElement {
 
 	/**
 	 * Gibt einen formatierten String zurück, der alle Inhalte des JSON-Elementes beinhaltet.
