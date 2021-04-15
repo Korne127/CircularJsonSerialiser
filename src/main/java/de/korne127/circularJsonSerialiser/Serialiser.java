@@ -261,6 +261,18 @@ public class Serialiser {
 			return "#" + objectClass.getName() + "=" + object.toString();
 		}
 
+		if (objectClass.isSynthetic() || objectClass.isAnonymousClass()) {
+			if (currentField == null) {
+				throw new SerialiseException("The given object is an anonymous class or lambda and therefore " +
+						"cannot be serialised.");
+			} else {
+				throw new SerialiseException("The " + getCurrentFieldInformation(objectClass.getName()) +
+						" is an anonymous class or lambda and therefore cannot be serialised.\n" +
+						"To prevent this, use a subclass instead of an anonymous class/lambda or mark the " +
+						"object with the @SerialiseIgnore Annotation");
+			}
+		}
+
 		int objectHash = System.identityHashCode(object);
 		if (hashTable.containsKey(objectHash)) {
 			return "@" + objectHash;
