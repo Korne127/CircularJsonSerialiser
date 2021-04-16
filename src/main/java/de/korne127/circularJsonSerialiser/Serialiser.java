@@ -24,6 +24,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
+import java.util.Stack;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingDeque;
@@ -39,6 +40,7 @@ import java.util.concurrent.TransferQueue;
 
 import de.korne127.circularJsonSerialiser.annotations.AfterDeserialise;
 import de.korne127.circularJsonSerialiser.annotations.BeforeSerialise;
+import de.korne127.circularJsonSerialiser.annotations.IgnoreCasting;
 import de.korne127.circularJsonSerialiser.annotations.SerialiseFile;
 import de.korne127.circularJsonSerialiser.annotations.SerialiseIgnore;
 import de.korne127.circularJsonSerialiser.annotations.Setter;
@@ -63,10 +65,14 @@ public class Serialiser {
 	//Für BeforeSerialise-Annotations
 	private Set<Integer> beforeSerialised;
 
+	//Für IgnoreCasting Annotations
+	private Stack<Boolean> ignoreCasting;
+
 	//Für Fehlermeldungen
 	private Field currentField;
 	private FieldType currentFieldType;
 
+	//Für Serialisierung allgemein
 	private Map<String, JSONObject> wholeSeparatedJson;
 	private JSONElement wholeSingleJson;
 	private boolean multiFile;
@@ -517,6 +523,8 @@ public class Serialiser {
 		hashTable = new LinkedHashMap<>();
 		currentField = null;
 		currentFieldType = null;
+		ignoreCasting = new Stack<>();
+		ignoreCasting.push(false);
 		if (content.charAt(0) == '[') {
 			wholeSingleJson = new JSONArray(content);
 		} else {
@@ -551,6 +559,8 @@ public class Serialiser {
 		currentField = null;
 		currentFieldType = null;
 		wholeSeparatedJson = new HashMap<>();
+		ignoreCasting = new Stack<>();
+		ignoreCasting.push(false);
 		for (String key : content.keySet()) {
 			wholeSeparatedJson.put(key, new JSONObject(content.get(key)));
 		}
@@ -768,8 +778,8 @@ public class Serialiser {
 	 * {@link #jsonToObject(Object) deserialisiert} und einem neuen Array hinzugefügt, das zurückgegeben wird.<br>
 	 * Ansonsten wird eine Instanz der Collection bzw. Map des Objektes erstellt; falls dies nicht möglich ist
 	 * wird eventuell ein {@link #getNewAlternativeInstance(Class, Exception) möglichst ähnlicher}
-	 * Collection- bzw. Map-Typ benutzt und abhängig von der {@link CollectionHandling Konfiguration} eine Warnung
-	 * ausgegeben.<br>
+	 * Collection- bzw. Map-Typ benutzt und abhängig von der {@link CollectionHandling Konfiguration} sowie eventuell
+	 * einer {@link IgnoreCasting} Annotation eine Warnung ausgegeben.<br>
 	 * Wenn das Objekt eine Collection ist, werden alle Inhalte des JSONArrays
 	 * {@link #jsonToObject(Object) deserialisiert} und der Collection-Instanz hinzugefügt, die dann zurückgegeben
 	 * wird. Wenn das Objekt eine Map ist, werden alle keys und values, die je als JSONObject in dem JSONArray
@@ -807,13 +817,14 @@ public class Serialiser {
 				if (collectionHandling == CollectionHandling.DEBUG_MODE) {
 					e.printStackTrace();
 				}
-				if (collectionHandling != CollectionHandling.NO_WARNING) {
-					System.out.println("WARNING: Class " + newClass.getName() +
+				if (collectionHandling != CollectionHandling.NO_WARNING && !ignoreCasting.peek() ||
+						collectionHandling == CollectionHandling.DEBUG_MODE) {
+					System.out.println("WARNING: " + getCurrentFieldInformation(newClass.getName()) +
 							" has been converted to class " + newObject.getClass().getName() +
 							". This might lead to a ClassCastException.\nIt is recommended not to use " +
 							"this Collection or Map type (" + newClass.getName() + ")!");
 				}
-				if (collectionHandling == CollectionHandling.CONVERT_WITH_WARNING) {
+				if (collectionHandling == CollectionHandling.CONVERT_WITH_WARNING && !ignoreCasting.peek()) {
 					System.out.println("This warning can be suppressed by using the NO_WARNING mode " +
 							"in the constructor of the serialiser.");
 				}
@@ -868,6 +879,7 @@ public class Serialiser {
 			currentField = field;
 			currentFieldType = FieldType.FIELD;
 			Object childJson = jsonObject.get(field.getName());
+			ignoreCasting.push(field.isAnnotationPresent(IgnoreCasting.class));
 			try {
 				field.set(newObject, jsonToObject(childJson));
 			} catch (IllegalArgumentException e) {
@@ -879,6 +891,7 @@ public class Serialiser {
 						getCurrentFieldInformation(field.getType().getName()) +
 						" could not be overwritten.", e);
 			}
+			ignoreCasting.pop();
 		}
 
 		return newObject;
