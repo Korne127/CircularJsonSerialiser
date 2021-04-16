@@ -75,6 +75,8 @@ public class Serialiser {
 	private final CollectionHandling collectionHandling;
 	private final boolean startSerialisingInSuperclass;
 	private Map<String, Object> methodParameters;
+	private Set<String> ignoreExceptionIDs;
+	private Set<String> ignoreSetterIDs;
 
 	/**
 	 * Enum, das die verschiedenen Optionen, wie sich der Serialiser verhalten soll, wenn
@@ -145,6 +147,8 @@ public class Serialiser {
 		this.collectionHandling = collectionHandling;
 		this.startSerialisingInSuperclass = startSerialisingInSuperclass;
 		methodParameters = new HashMap<>();
+		ignoreExceptionIDs = new HashSet<>();
+		ignoreSetterIDs = new HashSet<>();
 	}
 
 	/**
@@ -156,6 +160,30 @@ public class Serialiser {
 	 */
 	public void setParameters(Map<String, Object> methodParameters) {
 		this.methodParameters = methodParameters;
+	}
+
+	/**
+	 * Nimmt ein Set an, das die ignoreExceptionIDs beinhaltet.
+	 * Ist eine {@link SerialiseIgnore} Annotation mit einer entsprechenden ID angegeben, wird diese Annotation
+	 * ausgenommen und das entsprechende Feld trotzdem (de)serialisiert.<br>
+	 * Dies erlaubt eine dynamische Serialisierung für verschiedene Fälle, in denen verschiedene Felder serialisiert
+	 * werden sollen.
+	 * @param ignoreExceptionIDs Das Set, das die ignoreExceptionIDs beinhaltet
+	 */
+	public void ignoreExceptionIDs(Set<String> ignoreExceptionIDs) {
+		this.ignoreExceptionIDs = ignoreExceptionIDs;
+	}
+
+	/**
+	 * Nimmt ein Set an, das die ignoreSetterIDs beinhaltet.
+	 * Ist eine {@link Setter} Annotation mit einer entsprechenden ID angegebene, wird diese Annotation
+	 * ausgenommen und das entsprechende Feld nach Deserialisierung nicht gesetzt.<br>
+	 * Dies erlaubt eine dynamische Serialisierung für verschiedene Fälle, in denen verschiedene Felder serialisiert
+	 * werden sollen.
+	 * @param ignoreSetterIDs Das Set, das die ignoreSetterIDs beinhaltet
+	 */
+	public void ignoreSetterIDs(Set<String> ignoreSetterIDs) {
+		this.ignoreSetterIDs = ignoreSetterIDs;
 	}
 
 	//----SERIALISE METHODEN----
@@ -441,7 +469,8 @@ public class Serialiser {
 			throws SerialiseException {
 		JSONObject jsonObject = new JSONObject();
 		jsonObject.put("class", objectClass.getName() + "=" + objectHash);
-		for (Field objectField : getSerialiseFields(objectClass, startSerialisingInSuperclass, false)) {
+		for (Field objectField : getSerialiseFields(objectClass, startSerialisingInSuperclass, false,
+				ignoreExceptionIDs)) {
 			currentField = objectField;
 			currentFieldType = FieldType.FIELD;
 			Object child;
@@ -548,8 +577,8 @@ public class Serialiser {
 	 * Falls das angegebene Objekt ein JSONArray ist, wird es über
 	 * {@link #jsonArrayToObject(JSONArray, Class, String, int) jsonArrayToObject} deserialisiert und zurückgegeben,
 	 * ansonsten über {@link #jsonObjectToObject(JSONObject, Class, int) jsonObjectToObject}.<br>
-	 * Zusätzlich werden Variablen des Objektes, die mit der {@link Setter} Annotation annotiert sind, auf das
-	 * mit der ParameterID verknüpfte Objekt gesetzt.
+	 * Zusätzlich werden Variablen des Objektes, die mit der {@link Setter} Annotation annotiert sind (sofern die
+	 * ParameterID nicht in ignoreSetterIDs ist), auf das mit der ParameterID verknüpfte Objekt gesetzt.
 	 * @param json Das angegebene Objekt aus der JSON-Datei, das deserialisiert werden soll
 	 * @return Ein Java-Objekt, in das das angegebene Objekt deserialisiert wurde
 	 * @throws DeserialiseException Wird geworfen, falls ein Fehler beim Deserialisieren des Objektes
@@ -591,8 +620,11 @@ public class Serialiser {
 			result = jsonObjectToObject((JSONObject) json, newClass, hash);
 		}
 
-		for (Field field : getSerialiseFields(newClass, true, true)) {
+		for (Field field : getSerialiseFields(newClass, true, true, ignoreExceptionIDs)) {
 			String parameterID = field.getDeclaredAnnotation(Setter.class).value();
+			if (ignoreSetterIDs.contains(parameterID)) {
+				continue;
+			}
 			String fieldClassName = field.getDeclaringClass().getName();
 			if (!methodParameters.containsKey(parameterID)) {
 				throw new DeserialiseException("Error: The field " + fieldClassName + "#" +
@@ -831,7 +863,8 @@ public class Serialiser {
 		Object newObject = getNewInstance(newClass);
 		hashTable.put(hash, newObject);
 
-		for (Field field : getSerialiseFields(newClass, startSerialisingInSuperclass, false)) {
+		for (Field field : getSerialiseFields(newClass, startSerialisingInSuperclass, false,
+				ignoreExceptionIDs)) {
 			currentField = field;
 			currentFieldType = FieldType.FIELD;
 			Object childJson = jsonObject.get(field.getName());
@@ -1121,7 +1154,8 @@ public class Serialiser {
 			}
 			return beforeSerialiseMethods;
 		}
-		for (Field field : getSerialiseFields(objectClass, startSerialisingInSuperclass, false)) {
+		for (Field field : getSerialiseFields(objectClass, startSerialisingInSuperclass, false,
+				ignoreExceptionIDs)) {
 			currentField = field;
 			currentFieldType = FieldType.FIELD;
 			Object child;
@@ -1315,7 +1349,7 @@ public class Serialiser {
 	 * (De-)Serialisieren benutzt werden können
 	 */
 	private static List<Field> getSerialiseFields(Class<?> objectClass, boolean startAtTheTop,
-												  boolean onlySetterFields) {
+												  boolean onlySetterFields, Set<String> exceptionIDs) {
 		List<Field> fieldList = new LinkedList<>();
 		LinkedList<Class<?>> classList = getAllSuperclasses(objectClass, startAtTheTop);
 		while (!classList.isEmpty()) {
@@ -1323,7 +1357,8 @@ public class Serialiser {
 			for (Field field : objectClass.getDeclaredFields()) {
 				field.setAccessible(true);
 				if (!isStaticFinal(field) &&
-						(!onlySetterFields && !field.isAnnotationPresent(SerialiseIgnore.class) ||
+						(!onlySetterFields && (!field.isAnnotationPresent(SerialiseIgnore.class) ||
+								exceptionIDs.contains(field.getAnnotation(SerialiseIgnore.class).value())) ||
 						onlySetterFields && field.isAnnotationPresent(Setter.class))) {
 					fieldList.add(field);
 				}
