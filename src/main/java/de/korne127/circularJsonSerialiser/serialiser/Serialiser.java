@@ -1,4 +1,4 @@
-package de.korne127.circularJsonSerialiser;
+package de.korne127.circularJsonSerialiser.serialiser;
 
 import javax.script.Bindings;
 import javax.script.SimpleBindings;
@@ -69,8 +69,7 @@ public class Serialiser {
 	private Stack<Boolean> ignoreCasting;
 
 	//Für Fehlermeldungen
-	private Field currentField;
-	private FieldType currentFieldType;
+	private PathInformation fieldInformation;
 
 	//Für Serialisierung allgemein
 	private Map<String, JSONObject> wholeSeparatedJson;
@@ -114,17 +113,6 @@ public class Serialiser {
 		 * {@link DeserialiseException} geworfen und der Programmablauf unterbrochen.
 		 */
 		NO_CASTING
-	}
-
-	/**
-	 * Enum über den Feldtyp des Feldes, welches aktuell serialisiert wird.<br>
-	 * Es wird nur verwendet, falls eine Fehlermeldung auftritt um das aktuelle Feld besser anzugeben.
-	 */
-	private enum FieldType {
-		FIELD,
-		ARRAY,
-		COLLECTION,
-		MAP
 	}
 
 	/**
@@ -207,8 +195,7 @@ public class Serialiser {
 	 */
 	public String serialiseObject(Object object) throws SerialiseException {
 		hashTable = new HashMap<>();
-		currentField = null;
-		currentFieldType = null;
+		fieldInformation = new PathInformation();
 		multiFile = false;
 		beforeSerialised = new HashSet<>();
 
@@ -234,8 +221,7 @@ public class Serialiser {
 	 */
 	public Map<String, String> serialiseObjectSeparated(Object object) throws SerialiseException {
 		hashTable = new HashMap<>();
-		currentField = null;
-		currentFieldType = null;
+		fieldInformation = new PathInformation();
 		wholeSeparatedJson = new HashMap<>();
 		multiFile = true;
 		beforeSerialised = new HashSet<>();
@@ -296,11 +282,12 @@ public class Serialiser {
 		}
 
 		if (objectClass.isSynthetic() || objectClass.isAnonymousClass()) {
-			if (currentField == null) {
+			fieldInformation.addClass(objectClass);
+			if (fieldInformation.hasNoPath()) {
 				throw new SerialiseException("The given object is an anonymous class or lambda and therefore " +
 						"cannot be serialised.");
 			} else {
-				throw new SerialiseException("The " + getCurrentFieldInformation(objectClass.getName()) +
+				throw new SerialiseException("The " + fieldInformation.toString() +
 						" is an anonymous class or lambda and therefore cannot be serialised.\n" +
 						"To prevent this, use a subclass instead of an anonymous class/lambda or mark the " +
 						"object with the @SerialiseIgnore Annotation");
@@ -313,16 +300,19 @@ public class Serialiser {
 		}
 		hashTable.put(objectHash, object);
 
+		fieldInformation.addClass(objectClass);
+		Object result;
 		if (objectClass.isArray() || object instanceof Collection) {
-			return collectionToJson(object, objectClass, objectHash, parentFileName);
+			result = collectionToJson(object, objectClass, objectHash, parentFileName);
+		} else if (object instanceof Map) {
+			result = mapToJson((Map<?, ?>) object, objectClass, objectHash, parentFileName);
+		} else if (SpecialClasses.getClassMap().containsKey(objectClass.getName())) {
+			result = specialClassToJson(object, objectClass);
+		} else {
+			result = javaObjectToJson(object, objectClass, objectHash, parentFileName);
 		}
-		if (object instanceof Map) {
-			return mapToJson((Map<?, ?>) object, objectClass, objectHash, parentFileName);
-		}
-		if (SpecialClasses.getClassMap().containsKey(objectClass.getName())) {
-			return specialClassToJson(object, objectClass);
-		}
-		return javaObjectToJson(object, objectClass, objectHash, parentFileName);
+		fieldInformation.remove();
+		return result;
 	}
 
 	/**
@@ -360,7 +350,6 @@ public class Serialiser {
 			throws SerialiseException {
 		Iterable<?> objectIterable;
 		if (objectClass.isArray()) {
-			currentFieldType = FieldType.ARRAY;
 			Object[] objectArray;
 			if (objectClass.getComponentType().isPrimitive()) {
 				objectArray = convertPrimitiveToArray(object);
@@ -369,7 +358,6 @@ public class Serialiser {
 			}
 			objectIterable = Arrays.asList(objectArray);
 		} else {
-			currentFieldType = FieldType.COLLECTION;
 			objectIterable = (Collection<?>) object;
 		}
 		JSONArray jsonChild = new JSONArray();
@@ -404,7 +392,6 @@ public class Serialiser {
 	 */
 	private JSONArray mapToJson(Map<?, ?> objectMap, Class<?> objectClass, int objectHash, String parentFileName)
 			throws SerialiseException {
-		currentFieldType = FieldType.MAP;
 		JSONArray map = new JSONArray();
 		map.put(objectClass.getName() + "=" + objectHash);
 		for (Object objectMapKey : objectMap.keySet()) {
@@ -454,7 +441,7 @@ public class Serialiser {
 		SpecialClasses specialClass = SpecialClasses.getClassMap().get(objectClass.getName());
 		String result = specialClass.serialise(object);
 		if (result == null) {
-			throw new SerialiseException(getCurrentFieldInformation(objectClass.getName()) +
+			throw new SerialiseException("The special class " + fieldInformation.toString() +
 					" could not be deserialised.");
 		}
 		return "#" + specialClass.getSpecialClassName() + "=" + result;
@@ -477,14 +464,12 @@ public class Serialiser {
 		jsonObject.put("class", objectClass.getName() + "=" + objectHash);
 		for (Field objectField : getSerialiseFields(objectClass, startSerialisingInSuperclass, false,
 				ignoreExceptionIDs)) {
-			currentField = objectField;
-			currentFieldType = FieldType.FIELD;
+			fieldInformation.addField(objectField);
 			Object child;
 			try {
 				child = objectField.get(object);
 			} catch (IllegalAccessException e) {
-				throw new SerialiseException("Fatal error: The field value of " +
-						getCurrentFieldInformation(objectField.getType().getName()) +
+				throw new SerialiseException("Fatal error: The field value of " + fieldInformation.toString() +
 						" could not be retrieved", e);
 			}
 			String currentFileName = getFileName(objectField, child);
@@ -499,6 +484,7 @@ public class Serialiser {
 				jsonObject.put(objectField.getName(), "@" + currentFileName + "#" + childHash);
 				putInWholeSeparatedJson(currentFileName, childHash, childJson);
 			}
+			fieldInformation.removeField(objectField);
 		}
 		return jsonObject;
 	}
@@ -521,8 +507,7 @@ public class Serialiser {
 	 */
 	public Object deserialiseObject(String content) throws JsonParseException, DeserialiseException {
 		hashTable = new LinkedHashMap<>();
-		currentField = null;
-		currentFieldType = null;
+		fieldInformation = new PathInformation();
 		ignoreCasting = new Stack<>();
 		ignoreCasting.push(false);
 		if (content.charAt(0) == '[') {
@@ -556,8 +541,7 @@ public class Serialiser {
 	public Object deserialiseSeparatedObject(Map<String, String> content)
 			throws JsonParseException, DeserialiseException {
 		hashTable = new LinkedHashMap<>();
-		currentField = null;
-		currentFieldType = null;
+		fieldInformation = new PathInformation();
 		wholeSeparatedJson = new HashMap<>();
 		ignoreCasting = new Stack<>();
 		ignoreCasting.push(false);
@@ -615,12 +599,13 @@ public class Serialiser {
 		if (hashTable.containsKey(hash)) {
 			return hashTable.get(hash);
 		}
+		fieldInformation.addClass(className);
 		Class<?> newClass;
 		try {
 			newClass = Class.forName(className);
 		} catch (ClassNotFoundException e) {
 			throw new DeserialiseException("The specified class " + className + ", used by " +
-					getCurrentFieldInformation(className) + " could not be found.", e);
+					fieldInformation.toString() + " could not be found.", e);
 		}
 
 		Object result;
@@ -650,6 +635,7 @@ public class Serialiser {
 						"could not be set.", e);
 			}
 		}
+		fieldInformation.remove();
 		return result;
 	}
 
@@ -712,9 +698,10 @@ public class Serialiser {
 			}
 			Object linkedObject = getLinkedFileObject(fileName, hash);
 			if (linkedObject == null) {
-				throw new DeserialiseException("The definition of the linked object " +
-						string + "(" + getCurrentFieldInformation(null) +
-						") could not be found.");
+				boolean isInside = fieldInformation.isFieldAdded();
+				throw new DeserialiseException("The definition of the linked object " + string +
+						(isInside ? " in " : " (") + fieldInformation.toString() +
+						(isInside ? "" : ")") + " could not be found.");
 			}
 			return linkedObject;
 		}
@@ -724,9 +711,10 @@ public class Serialiser {
 		}
 		Object linkedObject = getLinkedObject(hash);
 		if (linkedObject == null) {
-			throw new DeserialiseException("The definition of the linked object " +
-					string + "(" + getCurrentFieldInformation(null) +
-					") could not be found.");
+			boolean isInside = fieldInformation.isFieldAdded();
+			throw new DeserialiseException("The definition of the linked object " + string +
+					(isInside ? " in " : " (") + fieldInformation.toString() +
+					(isInside ? "" : ")") + " could not be found.");
 		}
 		return linkedObject;
 	}
@@ -748,14 +736,16 @@ public class Serialiser {
 	private Object jsonToSpecialClassOrEnum(String string) throws DeserialiseException {
 		String[] classInfos = string.split("=");
 		String className = classInfos[0].substring(1);
+		fieldInformation.addClass(className);
 		String classValue = classInfos[1];
 		if (SpecialClasses.getClassMap().containsKey(className)) {
 			SpecialClasses specialClass = SpecialClasses.getClassMap().get(className);
 			Object result = specialClass.deserialise(classValue);
 			if (result == null) {
-				throw new DeserialiseException(getCurrentFieldInformation(className) +
-						", value: " + classValue + " could not be deserialised.");
+				throw new DeserialiseException(fieldInformation.toString() + ", value: " + classValue +
+						" could not be deserialised.");
 			}
+			fieldInformation.remove();
 			return result;
 		}
 		Class<?> objectClass;
@@ -763,13 +753,14 @@ public class Serialiser {
 			objectClass = Class.forName(className);
 		} catch (ClassNotFoundException e) {
 			throw new DeserialiseException("The specified class " + className + ", used by " +
-					getCurrentFieldInformation(className) + " could not be found.", e);
+					fieldInformation.toString() + " could not be found.", e);
 		}
 		if (objectClass.isEnum()) {
+			fieldInformation.remove();
 			return getNewEnumInstance(classValue, objectClass);
 		}
 		throw new DeserialiseException("The definition of the special class " + className +
-				", used by " + getCurrentFieldInformation(className) + " could not be found.");
+				", used by " + fieldInformation.toString() + " could not be found.");
 	}
 
 	/**
@@ -796,7 +787,6 @@ public class Serialiser {
 	private Object jsonArrayToObject(JSONArray jsonArray, Class<?> newClass, String className, int hash)
 			throws DeserialiseException {
 		if (newClass.isArray()) {
-			currentFieldType = FieldType.ARRAY;
 			Object newArray = Array.newInstance(newClass.getComponentType(), jsonArray.length() - 1);
 			hashTable.put(hash, newArray);
 			for (int arrayCreateIterator = 1; arrayCreateIterator < jsonArray.length();
@@ -819,7 +809,7 @@ public class Serialiser {
 				}
 				if (collectionHandling != CollectionHandling.NO_WARNING && !ignoreCasting.peek() ||
 						collectionHandling == CollectionHandling.DEBUG_MODE) {
-					System.out.println("WARNING: " + getCurrentFieldInformation(newClass.getName()) +
+					System.out.println("WARNING: " + fieldInformation.toString() +
 							" has been converted to class " + newObject.getClass().getName() +
 							". This might lead to a ClassCastException.\nIt is recommended not to use " +
 							"this Collection or Map type (" + newClass.getName() + ")!");
@@ -831,7 +821,6 @@ public class Serialiser {
 			}
 		}
 		if (newObject instanceof Collection) {
-			currentFieldType = FieldType.COLLECTION;
 			@SuppressWarnings("unchecked")
 			Collection<Object> newCollection = (Collection<Object>) newObject;
 			hashTable.put(hash, newCollection);
@@ -841,7 +830,6 @@ public class Serialiser {
 			return newCollection;
 		}
 		if (newObject instanceof Map) {
-			currentFieldType = FieldType.MAP;
 			@SuppressWarnings("unchecked")
 			Map<Object, Object> newMap = (Map<Object, Object>) newObject;
 			hashTable.put(hash, newMap);
@@ -854,7 +842,7 @@ public class Serialiser {
 			return newMap;
 		}
 		throw new DeserialiseException("The specified class " + className + ", used by " +
-				getCurrentFieldInformation(className) + " could not be deserialised as it's neither an " +
+				fieldInformation.toString() + " could not be deserialised as it's neither an " +
 				"array, a collection or a map.");
 	}
 
@@ -876,22 +864,22 @@ public class Serialiser {
 
 		for (Field field : getSerialiseFields(newClass, startSerialisingInSuperclass, false,
 				ignoreExceptionIDs)) {
-			currentField = field;
-			currentFieldType = FieldType.FIELD;
+			fieldInformation.addField(field);
 			Object childJson = jsonObject.get(field.getName());
 			ignoreCasting.push(field.isAnnotationPresent(IgnoreCasting.class));
 			try {
 				field.set(newObject, jsonToObject(childJson));
 			} catch (IllegalArgumentException e) {
-				throw new DeserialiseException("Type Mismatch: " +
-						getCurrentFieldInformation(field.getType().getName()) +
+				fieldInformation.addField(field);
+				throw new DeserialiseException("Type Mismatch: " + fieldInformation.toString() +
 						" is not equal to JSON-Element child type", e);
 			} catch (IllegalAccessException e) {
-				throw new DeserialiseException("Illegal Access: " +
-						getCurrentFieldInformation(field.getType().getName()) +
+				fieldInformation.addField(field);
+				throw new DeserialiseException("Illegal Access: " + fieldInformation.toString() +
 						" could not be overwritten.", e);
 			}
 			ignoreCasting.pop();
+			fieldInformation.removeField(field);
 		}
 
 		return newObject;
@@ -987,8 +975,8 @@ public class Serialiser {
 		try {
 			newClass = Class.forName(className);
 		} catch (ClassNotFoundException e) {
-			throw new DeserialiseException("The specified class " + className + ", used by " +
-					getCurrentFieldInformation(className) + " could not be found.", e);
+			throw new DeserialiseException("The class " + className +
+					", specified in the JSON-String could not be found.", e);
 		}
 
 		if (Map.class.isAssignableFrom(newClass)) {
@@ -1169,16 +1157,16 @@ public class Serialiser {
 		}
 		for (Field field : getSerialiseFields(objectClass, startSerialisingInSuperclass, false,
 				ignoreExceptionIDs)) {
-			currentField = field;
-			currentFieldType = FieldType.FIELD;
+			fieldInformation.addField(field);
 			Object child;
 			try {
 				child = field.get(object);
 			} catch (IllegalAccessException e) {
 				throw new SerialiseException("Fatal error: The field value of " +
-						getCurrentFieldInformation(field.getType().getName()) + " could not be retrieved", e);
+						fieldInformation.toString() + " could not be retrieved", e);
 			}
 			beforeSerialiseMethods = executeBeforeSerialiseMethods(child, beforeSerialiseMethods);
+			fieldInformation.removeField(field);
 		}
 		return beforeSerialiseMethods;
 	}
@@ -1198,8 +1186,7 @@ public class Serialiser {
 		for (Object object : hashTable.values()) {
 			Class<?> objectClass = object.getClass();
 			if (!afterDeserialiseMethods.containsKey(objectClass)) {
-				afterDeserialiseMethods.put(objectClass,
-						getMethodsWithAnnotation(objectClass, AfterDeserialise.class));
+				afterDeserialiseMethods.put(objectClass, getMethodsWithAnnotation(objectClass, AfterDeserialise.class));
 			}
 			for (Method method : afterDeserialiseMethods.get(objectClass)) {
 				String methodClassName = method.getDeclaringClass().getName();
@@ -1246,20 +1233,20 @@ public class Serialiser {
 			constructor = objectClass.getDeclaredConstructor();
 		} catch (NoSuchMethodException e) {
 			throw new DeserialiseException("No default constructor found for class " + objectClass.getName() +
-					", used by " + getCurrentFieldInformation(objectClass.getName()) + ".", e);
+					", used by " + fieldInformation.toString() + ".", e);
 		}
 		constructor.setAccessible(true);
 		try {
 			return constructor.newInstance();
 		} catch (InstantiationException e) {
 			throw new DeserialiseException("Class " + objectClass.getName() + ", used by " +
-					getCurrentFieldInformation(objectClass.getName()) + " could not be instantiated.", e);
+					fieldInformation.toString() + " could not be instantiated.", e);
 		} catch (IllegalAccessException e) {
 			throw new DeserialiseException("Illegal access: Class " + objectClass.getName() + ", used by " +
-					getCurrentFieldInformation(objectClass.getName()) + " could not be instantiated.", e);
+					fieldInformation.toString() + " could not be instantiated.", e);
 		} catch (InvocationTargetException e) {
 			throw new DeserialiseException("The default constructor of class " + objectClass.getName() +
-					", used by " + getCurrentFieldInformation(objectClass.getName()) + " threw an exception.", e);
+					", used by " + fieldInformation.toString() + " threw an exception.", e);
 		}
 	}
 
@@ -1312,34 +1299,8 @@ public class Serialiser {
 			}
 			return new LinkedList<>();
 		}
-		throw new DeserialiseException("Class " + objectClass + ", used by " +
-				getCurrentFieldInformation(objectClass.getName()) +
+		throw new DeserialiseException("Class " + objectClass + ", used by " + fieldInformation.toString() +
 				" could not be instantiated and no alternative class could be found.", cause);
-	}
-
-	/**
-	 * Hilfsmethode:<br>
-	 * Gibt einen String, der Informationen über das Element, was aktuell serialisiert oder
-	 * deserialisiert wird, zurück. Dies wird für Fehlermeldungen benutzt, falls bei der
-	 * Serialisierung oder Deserialisiserung ein Fehler auftritt.
-	 * @param currentType Die Klasse des Elementes, was aktuell serialisisert wird
-	 * @return Ein String, der Informationen über das Element, was aktuell serialisisert oder
-	 * deserialisisert wird
-	 */
-	private String getCurrentFieldInformation(String currentType) {
-		String message;
-		switch (currentFieldType) {
-			case FIELD: message = "Field "; break;
-			case ARRAY: message = "Element of array "; break;
-			case COLLECTION: message = "Element of collection "; break;
-			case MAP: message = "Element of Map "; break;
-			default: throw new IllegalStateException("Field type must have a value.");
-		}
-		if (currentType == null) {
-			return message + currentField.getDeclaringClass().getName() + "#" + currentField.getName();
-		}
-		return message + currentField.getDeclaringClass().getName() + "#" + currentField.getName() +
-				" (type: " + currentType + ")";
 	}
 
 

@@ -12,7 +12,8 @@ import java.util.Set;
  * Wenn ein Attribut mit dieser Annotation belegt ist, wird es beim Serialisierungsprozess ignoriert
  * und nicht in dem generierten String kodiert mit zurückgegeben, es sei denn, der angegebene Wert der
  * Annotation ist als IgnoreExceptionID über
- * {@link de.korne127.circularJsonSerialiser.Serialiser#ignoreExceptionIDs(Set) ignoreExceptionIDs} gesetzt worden.
+ * {@link de.korne127.circularJsonSerialiser.serialiser.Serialiser#ignoreExceptionIDs(Set) ignoreExceptionIDs}
+ * gesetzt worden.
  * @author Korne127
  */
 @Target(ElementType.FIELD)

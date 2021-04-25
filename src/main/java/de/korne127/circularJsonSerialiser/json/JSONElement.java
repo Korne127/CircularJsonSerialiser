@@ -1,6 +1,6 @@
 package de.korne127.circularJsonSerialiser.json;
 
-import de.korne127.circularJsonSerialiser.Serialiser;
+import de.korne127.circularJsonSerialiser.serialiser.Serialiser;
 
 /**
  * JSONElement-Interface:<br>

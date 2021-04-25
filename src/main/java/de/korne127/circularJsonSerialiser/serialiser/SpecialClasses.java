@@ -1,4 +1,4 @@
-package de.korne127.circularJsonSerialiser;
+package de.korne127.circularJsonSerialiser.serialiser;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;

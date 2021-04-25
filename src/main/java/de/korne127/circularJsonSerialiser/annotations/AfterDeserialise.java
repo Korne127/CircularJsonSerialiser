@@ -12,7 +12,7 @@ import java.lang.annotation.Target;
  * entsprechenden Klasse ausgeführt.
  * Die Methode kann ein Objekt als Parameter annehmen; in diesem Fall muss ein Wert für die Annotation gesetzt
  * werden und das entsprechende Objekt im Serialiser zu diesem Wert mit der
- * {@link de.korne127.circularJsonSerialiser.Serialiser#setParameters(java.util.Map) setParameters}
+ * {@link de.korne127.circularJsonSerialiser.serialiser.Serialiser#setParameters(java.util.Map) setParameters}
  * Methode angegeben werden.
  * @author Korne127
  */
