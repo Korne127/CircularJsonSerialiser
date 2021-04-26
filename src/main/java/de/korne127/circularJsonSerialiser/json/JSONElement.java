@@ -1,6 +1,6 @@
 package de.korne127.circularJsonSerialiser.json;
 
-import de.korne127.circularJsonSerialiser.serialiser.Serialiser;
+import de.korne127.circularJsonSerialiser.serialiser.SerialiseUtils;
 
 /**
  * JSONElement-Interface:<br>
@@ -77,7 +77,7 @@ public interface JSONElement {
 		if (object instanceof Character) {
 			return "'" + object + "'";
 		}
-		if (Serialiser.isSimpleType(object.getClass()) || object instanceof Boolean) {
+		if (SerialiseUtils.isSimpleType(object.getClass()) || object instanceof Boolean) {
 			if (object instanceof Byte) {
 				return object.toString() + "B";
 			} else if (object instanceof Short) {

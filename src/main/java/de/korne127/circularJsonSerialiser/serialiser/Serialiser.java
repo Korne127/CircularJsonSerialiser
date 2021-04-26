@@ -1,47 +1,22 @@
 package de.korne127.circularJsonSerialiser.serialiser;
 
-import javax.script.Bindings;
-import javax.script.SimpleBindings;
-import java.lang.annotation.Annotation;
 import java.lang.reflect.Array;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 import java.util.Set;
-import java.util.SortedMap;
-import java.util.SortedSet;
 import java.util.Stack;
-import java.util.TreeMap;
-import java.util.TreeSet;
-import java.util.concurrent.BlockingDeque;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ConcurrentNavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.LinkedTransferQueue;
-import java.util.concurrent.TransferQueue;
 
 import de.korne127.circularJsonSerialiser.annotations.AfterDeserialise;
 import de.korne127.circularJsonSerialiser.annotations.BeforeSerialise;
 import de.korne127.circularJsonSerialiser.annotations.IgnoreCasting;
-import de.korne127.circularJsonSerialiser.annotations.SerialiseFile;
 import de.korne127.circularJsonSerialiser.annotations.SerialiseIgnore;
 import de.korne127.circularJsonSerialiser.annotations.Setter;
 import de.korne127.circularJsonSerialiser.exceptions.DeserialiseException;
@@ -263,7 +238,7 @@ public class Serialiser {
 		multiFile = true;
 		beforeSerialised = new HashSet<>();
 
-		String mainFileName = getFileName(object);
+		String mainFileName = SerialiseUtils.getFileName(object);
 		if (mainFileName == null) {
 			mainFileName = "Standard";
 		}
@@ -289,7 +264,7 @@ public class Serialiser {
 	/**
 	 * Serialisiert ein angegebenes Java-Objekt in ein für Json benutzbares Objekt.<br>
 	 * Falls das angegebene Objekt null ist, wird null zurückgegeben.<br>
-	 * Falls das angegebene Objekt {@link #isSimpleType(Class) simpel} ist, wird
+	 * Falls das angegebene Objekt {@link SerialiseUtils#isSimpleType(Class) simpel} ist, wird
 	 * {@link #simpleTypeToJson(Object, Class) simpleTypeToJson} zurückgegeben.<br>
 	 * Falls das angegebene Objekt ein Enum ist, wird es als String kodiert zurückgegeben.<br>
 	 * Falls das angegebene Objekt bereits serialisiert ist, wird ein als String kodierter Verweis zurückgegeben.<br>
@@ -311,7 +286,7 @@ public class Serialiser {
 			return null;
 		}
 		Class<?> objectClass = object.getClass();
-		if (isSimpleType(objectClass)) {
+		if (SerialiseUtils.isSimpleType(objectClass)) {
 			return simpleTypeToJson(object, objectClass);
 		}
 		if (objectClass.isEnum()) {
@@ -389,7 +364,7 @@ public class Serialiser {
 		if (objectClass.isArray()) {
 			Object[] objectArray;
 			if (objectClass.getComponentType().isPrimitive()) {
-				objectArray = convertPrimitiveToArray(object);
+				objectArray = SerialiseUtils.convertPrimitiveToArray(object);
 			} else {
 				objectArray = (Object[]) object;
 			}
@@ -400,12 +375,13 @@ public class Serialiser {
 		JSONArray jsonChild = new JSONArray();
 		jsonChild.put(objectClass.getName() + "=" + objectHash);
 		for (Object objectChild : objectIterable) {
-			String childFileName = getFileName(objectChild);
+			String childFileName = SerialiseUtils.getFileName(objectChild);
 			if (multiFile && parentFileName.equals(childFileName)) {
 				childFileName = null;
 			}
 			Object childJson = objectToJson(objectChild, childFileName == null ? parentFileName : childFileName);
-			if (!multiFile || childJson == null || childFileName == null || isSimpleType(childJson.getClass())) {
+			if (!multiFile || childJson == null || childFileName == null ||
+					SerialiseUtils.isSimpleType(childJson.getClass())) {
 				jsonChild.put(childJson);
 			} else {
 				int childHash = System.identityHashCode(objectChild);
@@ -435,12 +411,13 @@ public class Serialiser {
 			Object objectMapValue = objectMap.get(objectMapKey);
 			JSONObject mapChild = new JSONObject();
 
-			String keyFileName = getFileName(objectMapKey);
+			String keyFileName = SerialiseUtils.getFileName(objectMapKey);
 			if (multiFile && parentFileName.equals(keyFileName)) {
 				keyFileName = null;
 			}
 			Object mapKeyJson = objectToJson(objectMapKey, keyFileName == null ? parentFileName : keyFileName);
-			if (!multiFile || mapKeyJson == null || keyFileName == null || isSimpleType(mapKeyJson.getClass())) {
+			if (!multiFile || mapKeyJson == null || keyFileName == null ||
+					SerialiseUtils.isSimpleType(mapKeyJson.getClass())) {
 				mapChild.put("key", mapKeyJson);
 			} else {
 				int childHash = System.identityHashCode(objectMapKey);
@@ -448,12 +425,13 @@ public class Serialiser {
 				putInWholeSeparatedJson(keyFileName, childHash, mapKeyJson);
 			}
 
-			String valueFileName = getFileName(objectMapValue);
+			String valueFileName = SerialiseUtils.getFileName(objectMapValue);
 			if (multiFile && parentFileName.equals(valueFileName)) {
 				valueFileName = null;
 			}
 			Object mapValueJson = objectToJson(objectMapValue, valueFileName == null ? parentFileName : valueFileName);
-			if (!multiFile || mapValueJson == null || valueFileName == null || isSimpleType(mapValueJson.getClass())) {
+			if (!multiFile || mapValueJson == null || valueFileName == null ||
+					SerialiseUtils.isSimpleType(mapValueJson.getClass())) {
 				mapChild.put("value", mapValueJson);
 			} else {
 				int childHash = System.identityHashCode(objectMapValue);
@@ -499,8 +477,8 @@ public class Serialiser {
 			throws SerialiseException {
 		JSONObject jsonObject = new JSONObject();
 		jsonObject.put("class", objectClass.getName() + "=" + objectHash);
-		for (Field objectField : getSerialiseFields(objectClass, startSerialisingInSuperclass, false,
-				ignoreExceptionIDs)) {
+		for (Field objectField : SerialiseUtils.getSerialiseFields(objectClass, startSerialisingInSuperclass,
+				false, ignoreExceptionIDs)) {
 			fieldInformation.addField(objectField);
 			Object child;
 			try {
@@ -509,12 +487,13 @@ public class Serialiser {
 				throw new SerialiseException("Fatal error: The field value of " + fieldInformation.toString() +
 						" could not be retrieved", e);
 			}
-			String currentFileName = getFileName(objectField, child);
+			String currentFileName = SerialiseUtils.getFileName(objectField, child);
 			if (multiFile && parentFileName.equals(currentFileName)) {
 				currentFileName = null;
 			}
 			Object childJson = objectToJson(child, currentFileName == null ? parentFileName : currentFileName);
-			if (!multiFile || childJson == null || currentFileName == null || isSimpleType(childJson.getClass())) {
+			if (!multiFile || childJson == null || currentFileName == null ||
+					SerialiseUtils.isSimpleType(childJson.getClass())) {
 				jsonObject.put(objectField.getName(), childJson);
 			} else {
 				int childHash = System.identityHashCode(child);
@@ -600,7 +579,7 @@ public class Serialiser {
 	/**
 	 * Deserialisiert ein Objekt aus der JSON-Datei in ein Java-Objekt.<br>
 	 * Falls das angegebene Objekt der JSON-Datei null ist, wird null zurückgegeben.<br>
-	 * Falls das angegebene Objekt der JSON-Datei {@link #isSimpleType(Class) simpel} ist, wird es über
+	 * Falls das angegebene Objekt der JSON-Datei {@link SerialiseUtils#isSimpleType(Class) simpel} ist, wird es über
 	 * {@link #simpleTypeToObject(Object) simpleTypeToObject} deserialisiert und zurückgegeben.<br>
 	 * Ansonsten werden die Informationen abgefragt, wie die Klasse und der beim Serialisieren gespeicherte Hash
 	 * des Java-Objektes ist.<br>
@@ -619,7 +598,7 @@ public class Serialiser {
 		if (json == null) {
 			return null;
 		}
-		if (isSimpleType(json.getClass())) {
+		if (SerialiseUtils.isSimpleType(json.getClass())) {
 			return simpleTypeToObject(json);
 		}
 
@@ -652,7 +631,8 @@ public class Serialiser {
 			result = jsonObjectToObject((JSONObject) json, newClass, hash);
 		}
 
-		for (Field field : getSerialiseFields(newClass, true, true, ignoreExceptionIDs)) {
+		for (Field field : SerialiseUtils.getSerialiseFields(newClass, true, true,
+				ignoreExceptionIDs)) {
 			String parameterID = field.getDeclaredAnnotation(Setter.class).value();
 			if (ignoreSetterIDs.contains(parameterID)) {
 				continue;
@@ -794,7 +774,7 @@ public class Serialiser {
 		}
 		if (objectClass.isEnum()) {
 			fieldInformation.remove();
-			return getNewEnumInstance(classValue, objectClass);
+			return SerialiseUtils.getNewEnumInstance(classValue, objectClass);
 		}
 		throw new DeserialiseException("The definition of the special class " + className +
 				", used by " + fieldInformation.toString() + " could not be found.");
@@ -805,9 +785,9 @@ public class Serialiser {
 	 * Falls das Objekt ein Array ist, werden die einzelnen Inhalte des JSONArrays
 	 * {@link #jsonToObject(Object) deserialisiert} und einem neuen Array hinzugefügt, das zurückgegeben wird.<br>
 	 * Ansonsten wird eine Instanz der Collection bzw. Map des Objektes erstellt; falls dies nicht möglich ist
-	 * wird eventuell ein {@link #getNewAlternativeInstance(Class, Exception) möglichst ähnlicher}
-	 * Collection- bzw. Map-Typ benutzt und abhängig von der {@link CollectionHandling Konfiguration} sowie eventuell
-	 * einer {@link IgnoreCasting} Annotation eine Warnung ausgegeben.<br>
+	 * wird eventuell ein {@link SerialiseUtils#getNewAlternativeInstance(Class, Exception, PathInformation)
+	 * möglichst ähnlicher} Collection- bzw. Map-Typ benutzt und abhängig von der {@link CollectionHandling
+	 * Konfiguration} sowie eventuell einer {@link IgnoreCasting} Annotation eine Warnung ausgegeben.<br>
 	 * Wenn das Objekt eine Collection ist, werden alle Inhalte des JSONArrays
 	 * {@link #jsonToObject(Object) deserialisiert} und der Collection-Instanz hinzugefügt, die dann zurückgegeben
 	 * wird. Wenn das Objekt eine Map ist, werden alle keys und values, die je als JSONObject in dem JSONArray
@@ -835,12 +815,12 @@ public class Serialiser {
 		}
 		Object newObject;
 		if (collectionHandling == CollectionHandling.NO_CASTING) {
-			newObject = getNewInstance(newClass);
+			newObject = SerialiseUtils.getNewInstance(newClass, fieldInformation);
 		} else {
 			try {
-				newObject = getNewInstance(newClass);
+				newObject = SerialiseUtils.getNewInstance(newClass, fieldInformation);
 			} catch (DeserialiseException e) {
-				newObject = getNewAlternativeInstance(newClass, e);
+				newObject = SerialiseUtils.getNewAlternativeInstance(newClass, e, fieldInformation);
 				if (collectionHandling == CollectionHandling.DEBUG_MODE) {
 					e.printStackTrace();
 				}
@@ -897,11 +877,11 @@ public class Serialiser {
 	 * auftritt.
 	 */
 	private Object jsonObjectToObject(JSONObject jsonObject, Class<?> newClass, int hash) throws DeserialiseException {
-		Object newObject = getNewInstance(newClass);
+		Object newObject = SerialiseUtils.getNewInstance(newClass, fieldInformation);
 		hashTable.put(hash, newObject);
 
-		for (Field field : getSerialiseFields(newClass, startSerialisingInSuperclass, false,
-				ignoreExceptionIDs)) {
+		for (Field field : SerialiseUtils.getSerialiseFields(newClass, startSerialisingInSuperclass,
+				false, ignoreExceptionIDs)) {
 			fieldInformation.addField(field);
 			Object childJson;
 			try {
@@ -975,7 +955,7 @@ public class Serialiser {
 
 	/**
 	 * Gibt das Objekt mit dem angegebenen Hash zurück, falls es in dem angegebenen JSON-Element existiert.<br>
-	 * Falls das angegebene JSON-Element null oder {@link #isSimpleType(Class) simpel} ist, wird null
+	 * Falls das angegebene JSON-Element null oder {@link SerialiseUtils#isSimpleType(Class) simpel} ist, wird null
 	 * zurückgegeben.<br>
 	 * Falls das angegebene JSON-Element ein JSONArray ist, wird
 	 * {@link #getLinkedObjectFromJSONArray(JSONArray, int) getLinkedObjectFromJSONArray} zurückgegeben,
@@ -991,7 +971,7 @@ public class Serialiser {
 		if (json == null) {
 			return null;
 		}
-		if (isSimpleType(json.getClass())) {
+		if (SerialiseUtils.isSimpleType(json.getClass())) {
 			return null;
 		}
 		if (json instanceof JSONArray) {
@@ -1144,7 +1124,7 @@ public class Serialiser {
 		}
 		int hash = System.identityHashCode(object);
 		Class<?> objectClass = object.getClass();
-		if (isSimpleType(objectClass) || beforeSerialised.contains(hash) || objectClass.isEnum() ||
+		if (SerialiseUtils.isSimpleType(objectClass) || beforeSerialised.contains(hash) || objectClass.isEnum() ||
 				SpecialClasses.getClassMap().containsKey(objectClass.getName())) {
 			return beforeSerialiseMethods;
 		} else {
@@ -1152,7 +1132,8 @@ public class Serialiser {
 		}
 
 		if (!beforeSerialiseMethods.containsKey(objectClass)) {
-			beforeSerialiseMethods.put(objectClass, getMethodsWithAnnotation(objectClass, BeforeSerialise.class));
+			beforeSerialiseMethods.put(objectClass,
+					SerialiseUtils.getMethodsWithAnnotation(objectClass, BeforeSerialise.class));
 		}
 
 		for (Method objectMethod : beforeSerialiseMethods.get(objectClass)) {
@@ -1192,7 +1173,7 @@ public class Serialiser {
 		if (objectClass.isArray()) {
 			Object[] objectArray;
 			if (objectClass.getComponentType().isPrimitive()) {
-				objectArray = convertPrimitiveToArray(object);
+				objectArray = SerialiseUtils.convertPrimitiveToArray(object);
 			} else {
 				objectArray = (Object[]) object;
 			}
@@ -1209,8 +1190,8 @@ public class Serialiser {
 			}
 			return beforeSerialiseMethods;
 		}
-		for (Field field : getSerialiseFields(objectClass, startSerialisingInSuperclass, false,
-				ignoreExceptionIDs)) {
+		for (Field field : SerialiseUtils.getSerialiseFields(objectClass, startSerialisingInSuperclass,
+				false, ignoreExceptionIDs)) {
 			fieldInformation.addField(field);
 			Object child;
 			try {
@@ -1240,7 +1221,8 @@ public class Serialiser {
 		for (Object object : hashTable.values()) {
 			Class<?> objectClass = object.getClass();
 			if (!afterDeserialiseMethods.containsKey(objectClass)) {
-				afterDeserialiseMethods.put(objectClass, getMethodsWithAnnotation(objectClass, AfterDeserialise.class));
+				afterDeserialiseMethods.put(objectClass,
+						SerialiseUtils.getMethodsWithAnnotation(objectClass, AfterDeserialise.class));
 			}
 			for (Method method : afterDeserialiseMethods.get(objectClass)) {
 				String methodClassName = method.getDeclaringClass().getName();
@@ -1270,270 +1252,5 @@ public class Serialiser {
 				}
 			}
 		}
-	}
-
-	/**
-	 * Hilfsmethode:<br>
-	 * Gibt eine neue Instanz einer angegebenen Klasse zurück.<br>
-	 * Dafür wird der Standardkonstruktor der Klasse ausgeführt und die neue Instanz zurückgegeben.
-	 * @param objectClass Die angegebene Klasse, von der eine neue Instanz zurückgegeben werden soll
-	 * @return Die neue Instanz der angegebenen Klasse
-	 * @throws DeserialiseException Wird geworfen, falls die neue Instanz der Klasse nicht instanziiert
-	 * werden konnte.
-	 */
-	private Object getNewInstance(Class<?> objectClass) throws DeserialiseException {
-		Constructor<?> constructor;
-		try {
-			constructor = objectClass.getDeclaredConstructor();
-		} catch (NoSuchMethodException e) {
-			throw new DeserialiseException("No default constructor found for class " + objectClass.getName() +
-					", used by " + fieldInformation.toString() + ".", e);
-		}
-		constructor.setAccessible(true);
-		try {
-			return constructor.newInstance();
-		} catch (InstantiationException e) {
-			throw new DeserialiseException("Class " + objectClass.getName() + ", used by " +
-					fieldInformation.toString() + " could not be instantiated.", e);
-		} catch (IllegalAccessException e) {
-			throw new DeserialiseException("Illegal access: Class " + objectClass.getName() + ", used by " +
-					fieldInformation.toString() + " could not be instantiated.", e);
-		} catch (InvocationTargetException e) {
-			throw new DeserialiseException("The default constructor of class " + objectClass.getName() +
-					", used by " + fieldInformation.toString() + " threw an exception.", e);
-		}
-	}
-
-	/**
-	 * Hilfsmethode:<br>
-	 * Sucht nach einer alternativen Klasse, falls keine Instanz der eigentlichen Collection / Map erstellt
-	 * werden konnte.
-	 * @param objectClass Die eigentliche Klasse, von der keine Instanz erstellt werden konnte
-	 * @param cause Die Exception, die geworfen wurde, als versucht wurde, die eigentliche Klasse zu erstellen
-	 * @return Eine Instanz aus einer Alternativklasse
-	 * @throws DeserialiseException Wird geworfen, wenn keine Alternativklasse gefunden werden konnte.
-	 */
-	private Object getNewAlternativeInstance(Class<?> objectClass, Exception cause) throws DeserialiseException {
-		if (List.class.isAssignableFrom(objectClass)) {
-			return new ArrayList<>();
-		}
-		if (Set.class.isAssignableFrom(objectClass)) {
-			if (SortedSet.class.isAssignableFrom(objectClass)) {
-				return new TreeSet<>();
-			}
-			return new LinkedHashSet<>();
-		}
-		if (Map.class.isAssignableFrom(objectClass)) {
-			if (SortedMap.class.isAssignableFrom(objectClass)) {
-				if (ConcurrentNavigableMap.class.isAssignableFrom(objectClass)) {
-					return new ConcurrentSkipListMap<>();
-				}
-				return new TreeMap<>();
-			}
-			if (ConcurrentMap.class.isAssignableFrom(objectClass)) {
-				return new ConcurrentHashMap<>();
-			}
-			if (Bindings.class.isAssignableFrom(objectClass)) {
-				return new SimpleBindings();
-			}
-			return new LinkedHashMap<>();
-		}
-		if (Queue.class.isAssignableFrom(objectClass)) {
-			if (BlockingQueue.class.isAssignableFrom(objectClass)) {
-				if (TransferQueue.class.isAssignableFrom(objectClass)) {
-					return new LinkedTransferQueue<>();
-				}
-				if (BlockingDeque.class.isAssignableFrom(objectClass)) {
-					return new LinkedBlockingDeque<>();
-				}
-				return new LinkedBlockingQueue<>();
-			}
-			if (Deque.class.isAssignableFrom(objectClass)) {
-				return new LinkedList<>();
-			}
-			return new LinkedList<>();
-		}
-		throw new DeserialiseException("Class " + objectClass + ", used by " + fieldInformation.toString() +
-				" could not be instantiated and no alternative class could be found.", cause);
-	}
-
-
-	//----STATISCHE HILFSMETHODEN----
-
-	/**
-	 * Hilfsmethode:<br>
-	 * Gibt Felder aus der angegebenen Klasse und aller Oberklassen in einer Liste zurück. Wenn onlySetterFields
-	 * true ist, werden nur die entsprechenden Felder, die eine {@link Setter} Annotation besitzen, zurückgegeben;
-	 * bei false werden alle Felder, die für das (De-)Serialisieren benutzt werden sollen, zurückgegeben.<br>
-	 * Die Reihenfolge, ob die Felder aus den Oberklassen zuerst aufgelistet werden sollen oder ob die Felder
-	 * aus der eigentlichen Klasse zuerst aufgelistet werden soll, wird durch einen angegebenen boolean bestimmt.
-	 * @param objectClass Die angegebene Klasse, aus der alle Felder, die für das (De-)Serialisieren benutzt werden
-	 *                    können, zurückgegeben werden sollen
-	 * @param startAtTheTop true - Die Felder der höchsten Oberklasse werden zuerst gelistet und die der
-	 *                      eigentlichen Klasse werden als letztes gelistet;<br>
-	 *                      false - Die Felder der eigentlichen Klasse werden zuerst gelistet und die der
-	 *                      höchsten Oberklasse werden als letztes gelistet
-	 * @return Eine Liste mit allen Feldern aus der angegebenen Klasse und aller Oberklassen, die für das
-	 * (De-)Serialisieren benutzt werden können
-	 */
-	private static List<Field> getSerialiseFields(Class<?> objectClass, boolean startAtTheTop,
-												  boolean onlySetterFields, Set<String> exceptionIDs) {
-		List<Field> fieldList = new LinkedList<>();
-		LinkedList<Class<?>> classList = getAllSuperclasses(objectClass, startAtTheTop);
-		while (!classList.isEmpty()) {
-			objectClass = classList.pop();
-			for (Field field : objectClass.getDeclaredFields()) {
-				field.setAccessible(true);
-				if (!isStaticFinal(field) &&
-						(!onlySetterFields && (!field.isAnnotationPresent(SerialiseIgnore.class) ||
-								exceptionIDs.contains(field.getAnnotation(SerialiseIgnore.class).value())) ||
-						onlySetterFields && field.isAnnotationPresent(Setter.class))) {
-					fieldList.add(field);
-				}
-			}
-		}
-		return fieldList;
-	}
-
-	/**
-	 * Hilfsmethode:<br>
-	 * Gibt alle Methoden aus der angegebenen Klasse und aller Oberklassen, die mit der bestimmten angegebenen
-	 * Annotation annotiert sind, in einer Liste zurück.
-	 * @param objectClass Die angegebene Klasse, aus der und deren Oberklassen alle Methoden mit der bestimmten
-	 *                    Annotation zurückgegeben werden sollen
-	 * @param annotation Die bestimmte Annotation
-	 * @return Eine Liste mit allen Methoden aus der angegebenen Klasse und aller Oberklassen, die mit der
-	 * bestimmten angegebenen Annotation annotiert sind
-	 */
-	private static List<Method> getMethodsWithAnnotation(Class<?> objectClass,
-														 Class<? extends Annotation> annotation) {
-		List<Method> methodList = new LinkedList<>();
-		LinkedList<Class<?>> classList = getAllSuperclasses(objectClass, true);
-		while (!classList.isEmpty()) {
-			objectClass = classList.pop();
-			for (Method method : objectClass.getDeclaredMethods()) {
-				method.setAccessible(true);
-				if (method.isAnnotationPresent(annotation)) {
-					methodList.add(method);
-				}
-			}
-		}
-		return methodList;
-	}
-
-	/**
-	 * Hilfsmethode:<br>
-	 * Gibt alle Oberklassen einer angegebenen Klasse (inklusive der angegebenen Klasse selbst) in einer
-	 * Liste zurück. Ein angegebener boolean gibt an, ob in der zurückgegebenen Liste die oberste Klasse
-	 * oder die unterste Klasse das erste Element ist.
-	 * @param objectClass Die angegebene Klasse, für die alle Oberklassen zurückgegeben werden solle
-	 * @param startAtTheTop true - Die oberste Klasse ist das erste Element der Liste und die eigentliche Klasse
-	 *                      das letzte Element der Liste;<br>
-	 *                      false - Die eigentliche Klasse ist das erste Element der Liste und die oberste Klasse
-	 *                      das letzte Element der Liste
-	 * @return Eine Liste mit allen Oberklassen einer angegebenen Klasse (inklusive der angegebenen Klasse selbst)
-	 */
-	private static LinkedList<Class<?>> getAllSuperclasses(Class<?> objectClass, boolean startAtTheTop) {
-		LinkedList<Class<?>> classList = new LinkedList<>();
-		if (startAtTheTop) {
-			while (objectClass != null) {
-				classList.addFirst(objectClass);
-				objectClass = objectClass.getSuperclass();
-			}
-		} else {
-			while (objectClass != null) {
-				classList.addLast(objectClass);
-				objectClass = objectClass.getSuperclass();
-			}
-		}
-		return classList;
-	}
-
-	/**
-	 * Hilfsmethode:<br>
-	 * Konvertiert ein Array eines primitiven Datentyps (z.B. int) in ein Array des Wrapper-Objektes dieses
-	 * Datentyps (z.B. Integer).
-	 * @param val Das Array eines primitiven Datentyps, welches konvertiert werden soll
-	 * @return Das konvertierte Array eines Wrapper-Objektes
-	 */
-	private static Object[] convertPrimitiveToArray(Object val) {
-		int length = Array.getLength(val);
-		Object[] outputArray = new Object[length];
-		for(int i = 0; i < length; i++){
-			outputArray[i] = Array.get(val, i);
-		}
-		return outputArray;
-	}
-
-	/**
-	 * Hilfsmethode:<br>
-	 * Gibt eine neue Instanz des angegebenen Enums mit dem angegebenen Wert zurück
-	 * @param name Der Wert des Enums, der zurückgegeben werden soll
-	 * @param type Die Enum-Klasse
-	 * @return Eine neue Instanz des angegebenen Enums mit dem angegebenen Wert
-	 */
-	@SuppressWarnings("unchecked")
-	private static <T extends Enum<T>> T getNewEnumInstance(String name, Class<?> type) {
-		return Enum.valueOf((Class<T>) type, name);
-	}
-
-	/**
-	 * Hilfsmethode:<br>
-	 * Gibt den Namen der Datei zurück, in die das angegebene Objekt serialisiert werden soll
-	 * @param field Das Feld, in dem das angegebene Objekt gespeichert ist
-	 * @param object Das angegebene Objekt
-	 * @return Der Name der Datei, in die das angegebene Objekt serialisiert werden soll
-	 */
-	private static String getFileName(Field field, Object object) {
-		if (field.isAnnotationPresent(SerialiseFile.class)) {
-			return field.getDeclaredAnnotation(SerialiseFile.class).value();
-		}
-		return getFileName(object);
-	}
-
-	/**
-	 * Hilfsmethode:<br>
-	 * Gibt den Namen der Datei zurück, in die das angegebene Objekt serialisiert werden soll
-	 * @param object Das angegebene Objekt
-	 * @return Der Name der Datei, in die das angegebene Objekt serialisiert werden soll
-	 */
-	private static String getFileName(Object object) {
-		if (object == null) {
-			return null;
-		}
-		Class<?> objectClass = object.getClass();
-		while (objectClass.isArray()) {
-			objectClass = objectClass.getComponentType();
-		}
-		if (objectClass.isAnnotationPresent(SerialiseFile.class)) {
-			return objectClass.getDeclaredAnnotation(SerialiseFile.class).value();
-		}
-		return null;
-	}
-
-	/**
-	 * Hilfsmethode:<br>
-	 * Testet, ob ein bestimmtes Feld static und final ist
-	 * @param field Das Feld, welches getestet werden soll
-	 * @return true - das Feld ist static und final;<br>
-	 *     false - das Feld ist nicht static und final
-	 */
-	private static boolean isStaticFinal(Field field) {
-		int modifiers = field.getModifiers();
-		return (Modifier.isStatic(modifiers) && Modifier.isFinal(modifiers));
-	}
-
-	/**
-	 * Hilfsmethode:<br>
-	 * Prüft, ob eine angegebene Klasse die Klasse eines Wrapper-Objektes eines simplen Datentyps oder ein
-	 * String ist.
-	 * @param objectClass Die Klasse, die geprüft werden soll
-	 * @return true, falls die angegebene Klasse die Klasse eines Wrapper-Objektes eines simplen Datentyps
-	 * oder ein String ist, ansonsten false
-	 */
-	public static boolean isSimpleType(Class<?> objectClass) {
-		return (objectClass == Integer.class || objectClass == Byte.class || objectClass == Short.class ||
-				objectClass == Long.class || objectClass == Float.class || objectClass == Double.class ||
-				objectClass == Character.class || objectClass == Boolean.class || objectClass == String.class);
 	}
 }
