@@ -78,6 +78,7 @@ public class Serialiser {
 
 	//Konfiguration
 	private final CollectionHandling collectionHandling;
+	private NewVariableHandling newVariableHandling;
 	private final boolean startSerialisingInSuperclass;
 	private Map<String, Object> methodParameters;
 	private Set<String> ignoreExceptionIDs;
@@ -85,7 +86,7 @@ public class Serialiser {
 
 	/**
 	 * Enum, das die verschiedenen Optionen, wie sich der Serialiser verhalten soll, wenn
-	 * keine Instanz einer Collection oder Map erstellt werden kann.<br>
+	 * keine Instanz einer Collection oder Map erstellt werden kann, enthält.<br>
 	 * Siehe {@link #NO_WARNING}, {@link #CONVERT_WITH_WARNING}, {@link #DEBUG_MODE}, {@link #NO_CASTING}.
 	 */
 	public enum CollectionHandling {
@@ -116,6 +117,30 @@ public class Serialiser {
 	}
 
 	/**
+	 * Enum, das die verschiedenen Optionen, wie sich der Serialiser verhalten soll, wenn
+	 * beim Deserialisierungsprozess eine Klasse eine "neue Variable", also eine Variable,
+	 * die (de)serialisiert werden soll, aber nicht im angegebenen Json gespeichert wurde,
+	 * besitzt, enthält.<br>
+	 * Siehe {@link #NO_WARNING}, {@link #WARNING}, {@link #EXCEPTION}.
+	 */
+	public enum NewVariableHandling {
+		/**
+		 * Falls eine Klasse eine neue Variable enthält, wird diese ignoriert.
+		 */
+		NO_WARNING,
+		/**
+		 * Falls eine Klasse eine neue Variable enthält, wird diese nicht gesetzt, aber es
+		 * wird eine Warnung ausgegeben.
+		 */
+		WARNING,
+		/**
+		 * Der Standard-Modus:<br>
+		 * Falls eine Klasse eine neue Variable enthält, wird eine Exception geworfen.
+		 */
+		EXCEPTION
+	}
+
+	/**
 	 * Der standardmäßige Konstruktor der Serialiser-Klasse:<br>
 	 * Erstellt einen neuen Serialiser.<br>
 	 * Setzt dabei den Modus, wie Collections behandelt werden auf
@@ -140,9 +165,21 @@ public class Serialiser {
 	public Serialiser(CollectionHandling collectionHandling, boolean startSerialisingInSuperclass) {
 		this.collectionHandling = collectionHandling;
 		this.startSerialisingInSuperclass = startSerialisingInSuperclass;
+		newVariableHandling = NewVariableHandling.EXCEPTION;
 		methodParameters = new HashMap<>();
 		ignoreExceptionIDs = new HashSet<>();
 		ignoreSetterIDs = new HashSet<>();
+	}
+
+	/**
+	 * Überschreibt den Konfigurationswert von {@link NewVariableHandling}, also wie sich der Serialiser verhalten
+	 * soll, wenn beim Deserialisierungsprozess eine Klasse eine "neue Variable", also eine Variable die
+	 * (de)serialisiert werden soll, aber nicht im angegebenen Json gespeichert wurde, besitzt.
+	 * @param newVariableHandling Der neue Konfigurationswert von {@link NewVariableHandling}, auf den überschrieben
+	 *                            werden soll
+	 */
+	public void setNewVariableHandling(NewVariableHandling newVariableHandling) {
+		this.newVariableHandling = newVariableHandling;
 	}
 
 	/**
@@ -815,8 +852,9 @@ public class Serialiser {
 							"this Collection or Map type (" + newClass.getName() + ")!");
 				}
 				if (collectionHandling == CollectionHandling.CONVERT_WITH_WARNING && !ignoreCasting.peek()) {
-					System.out.println("This warning can be suppressed by using the NO_WARNING mode " +
-							"in the constructor of the serialiser.");
+					System.out.println("This warning can be suppressed by annotating the field with the " +
+							"IgnoreCasting annotation or by using the NO_WARNING mode in the constructor of " +
+							"the serialiser.");
 				}
 			}
 		}
@@ -865,7 +903,23 @@ public class Serialiser {
 		for (Field field : getSerialiseFields(newClass, startSerialisingInSuperclass, false,
 				ignoreExceptionIDs)) {
 			fieldInformation.addField(field);
-			Object childJson = jsonObject.get(field.getName());
+			Object childJson;
+			try {
+				childJson = jsonObject.get(field.getName());
+			} catch (DeserialiseException e) {
+				String message = "JSON-Object child " + fieldInformation.toString() +
+						" (from object " + newClass.getName() + " " + hash + ") could not be found.\n" +
+						"This happens if this variable has been added to the class after serialisation " +
+						"or if the Json has been manually edited.";
+				switch (newVariableHandling) {
+					case WARNING:
+						System.out.println("WARNING: " + message); break;
+					case EXCEPTION:
+						throw new DeserialiseException(message + "\nYou can prevent this exception " +
+								"by setting the newVariableHandling to WARNING or NO_WARNING", e);
+				}
+				continue;
+			}
 			ignoreCasting.push(field.isAnnotationPresent(IgnoreCasting.class));
 			try {
 				field.set(newObject, jsonToObject(childJson));
