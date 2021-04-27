@@ -13,7 +13,6 @@ import de.korne127.circularJsonSerialiser.exceptions.DeserialiseException;
 import de.korne127.circularJsonSerialiser.exceptions.JsonParseException;
 import de.korne127.circularJsonSerialiser.exceptions.SerialiseException;
 import de.korne127.circularJsonSerialiser.json.JSONArray;
-import de.korne127.circularJsonSerialiser.json.JSONElement;
 import de.korne127.circularJsonSerialiser.json.JSONObject;
 
 /**
@@ -262,11 +261,13 @@ public class Serialiser {
 	public Object deserialiseObject(String content) throws JsonParseException, DeserialiseException {
 		DeserialiseProcess process = new DeserialiseProcess(false, startSerialisingInSuperclass,
 				methodParameters, ignoreExceptionIDs, ignoreSetterIDs, collectionHandling, newVariableHandling);
-		JSONElement json;
+		Object json;
 		if (content.charAt(0) == '[') {
 			json = new JSONArray(content);
-		} else {
+		} else if (content.charAt(0) == '{') {
 			json = new JSONObject(content);
+		} else {
+			json = content;
 		}
 		return process.deserialise(json, null);
 	}

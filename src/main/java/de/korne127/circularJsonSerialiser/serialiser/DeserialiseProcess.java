@@ -97,11 +97,11 @@ public class DeserialiseProcess {
 	 */
 	public Object deserialise(Object json, Map<String, JSONObject> wholeSeparatedJson) throws DeserialiseException {
 		if (!multiFile) {
-			wholeSingleJson = (JSONElement) json;
-			this.wholeSeparatedJson = null;
+			if (json instanceof JSONElement) {
+				wholeSingleJson = (JSONElement) json;
+			}
 		} else {
 			this.wholeSeparatedJson = wholeSeparatedJson;
-			wholeSingleJson = null;
 		}
 
 		Object result = jsonToObject(json);
