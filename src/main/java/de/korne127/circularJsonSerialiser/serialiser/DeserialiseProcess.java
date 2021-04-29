@@ -4,13 +4,14 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.ArrayDeque;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.Stack;
 
 import de.korne127.circularJsonSerialiser.annotations.AfterDeserialise;
 import de.korne127.circularJsonSerialiser.annotations.IgnoreCasting;
@@ -25,7 +26,7 @@ import de.korne127.circularJsonSerialiser.json.JSONObject;
  * Diese Klasse wird intern von dem {@link Serialiser} benutzt, um JSON-Elemente zu deserialisieren.
  * @author Korne127
  */
-public class DeserialiseProcess {
+class DeserialiseProcess {
 
 	//Für Deserialisierung allgemein
 	private final Map<Integer, Object> hashTable;
@@ -34,7 +35,7 @@ public class DeserialiseProcess {
 	private final boolean multiFile;
 
 	//Für IgnoreCasting Annotations
-	private final Stack<Boolean> ignoreCasting;
+	private final Deque<Boolean> ignoreCasting;
 
 	//Für Fehlermeldungen
 	private final PathInformation fieldInformation;
@@ -63,13 +64,13 @@ public class DeserialiseProcess {
 	 * @param newVariableHandling Der
 	 * {@link de.korne127.circularJsonSerialiser.serialiser.Serialiser.NewVariableHandling}-Konfigurationswert
 	 */
-	public DeserialiseProcess(boolean multiFile, boolean startSerialisingInSuperclass,
+	DeserialiseProcess(boolean multiFile, boolean startSerialisingInSuperclass,
 							  Map<String, Object> methodParameters, Set<String> ignoreExceptionIDs,
 							  Set<String> ignoreSetterIDs, Serialiser.CollectionHandling collectionHandling,
 							  Serialiser.NewVariableHandling newVariableHandling) {
 		hashTable = new LinkedHashMap<>();
 		fieldInformation = new PathInformation();
-		ignoreCasting = new Stack<>();
+		ignoreCasting = new ArrayDeque<>();
 		ignoreCasting.push(false);
 
 		this.multiFile = multiFile;
@@ -95,7 +96,7 @@ public class DeserialiseProcess {
 	 * @throws DeserialiseException Wird geworfen, falls ein Fehler beim Deserialisieren
 	 * des Objektes aufgetreten ist.
 	 */
-	public Object deserialise(Object json, Map<String, JSONObject> wholeSeparatedJson) throws DeserialiseException {
+	Object deserialise(Object json, Map<String, JSONObject> wholeSeparatedJson) throws DeserialiseException {
 		if (!multiFile) {
 			if (json instanceof JSONElement) {
 				wholeSingleJson = (JSONElement) json;
@@ -357,14 +358,15 @@ public class DeserialiseProcess {
 				if (collectionHandling == Serialiser.CollectionHandling.DEBUG_MODE) {
 					e.printStackTrace();
 				}
-				if (collectionHandling != Serialiser.CollectionHandling.NO_WARNING && !ignoreCasting.peek() ||
+				if (collectionHandling != Serialiser.CollectionHandling.NO_WARNING && !ignoreCasting.getLast() ||
 						collectionHandling == Serialiser.CollectionHandling.DEBUG_MODE) {
 					System.out.println("WARNING: " + fieldInformation.toString() +
 							" has been converted to class " + newObject.getClass().getName() +
 							". This might lead to a ClassCastException.\nIt is recommended not to use " +
 							"this Collection or Map type (" + newClass.getName() + ")!");
 				}
-				if (collectionHandling == Serialiser.CollectionHandling.CONVERT_WITH_WARNING && !ignoreCasting.peek()) {
+				if (collectionHandling == Serialiser.CollectionHandling.CONVERT_WITH_WARNING &&
+						!ignoreCasting.getLast()) {
 					System.out.println("This warning can be suppressed by annotating the field with the " +
 							"IgnoreCasting annotation or by using the NO_WARNING mode in the constructor of " +
 							"the serialiser.");

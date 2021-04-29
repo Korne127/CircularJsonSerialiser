@@ -114,7 +114,7 @@ public class JSONArray implements JSONElement {
 	 * @return Ein formatierter String, der alle Inhalte des JSON-Arrays beinhaltet
 	 */
 	public String toString(int indentFactor) {
-		if (list.size() == 0) {
+		if (list.isEmpty()) {
 			return "[]";
 		}
 		StringBuilder json = new StringBuilder("[");

@@ -15,7 +15,7 @@ import java.lang.reflect.Field;
 class ObjectInformation {
 
 	private final boolean isField;
-	private final String objectInformation;
+	private final String informationString;
 
 	/**
 	 * Ein Konstruktor der ObjectInformation-Klasse:<br>
@@ -25,7 +25,7 @@ class ObjectInformation {
 	 */
 	ObjectInformation(String className) {
 		isField = false;
-		objectInformation = className;
+		informationString = className;
 	}
 
 	/**
@@ -36,7 +36,7 @@ class ObjectInformation {
 	 */
 	ObjectInformation(Field field) {
 		isField = true;
-		objectInformation = field.getType().getName() + " " +
+		informationString = field.getType().getName() + " " +
 				field.getDeclaringClass().getName() + "#" + field.getName();
 	}
 
@@ -55,6 +55,6 @@ class ObjectInformation {
 	 */
 	@Override
 	public String toString() {
-		return objectInformation;
+		return informationString;
 	}
 }

@@ -21,7 +21,7 @@ import de.korne127.circularJsonSerialiser.json.JSONObject;
  * Diese Klasse wird intern von dem {@link Serialiser} benutzt, um Java-Objekte zu serialisieren.
  * @author Korne127
  */
-public class SerialiseProcess {
+class SerialiseProcess {
 
 	//Für Serialisierung allgemein
 	private final Map<Integer, Object> hashTable;
@@ -50,7 +50,7 @@ public class SerialiseProcess {
 	 * @param methodParameters Die Map, die ParameterIDs auf die zugehörigen Objekte abbildet
 	 * @param ignoreExceptionIDs Das Set, das die ignoreExceptionIDs beinhaltet
 	 */
-	public SerialiseProcess(boolean multiFile, boolean startSerialisingInSuperclass,
+	SerialiseProcess(boolean multiFile, boolean startSerialisingInSuperclass,
 							Map<String, Object> methodParameters, Set<String> ignoreExceptionIDs) {
 		hashTable = new HashMap<>();
 		fieldInformation = new PathInformation();
@@ -74,7 +74,7 @@ public class SerialiseProcess {
 	 * @return Ein JSON-Element, in das das angegebene Objekt serialisiert wurde
 	 * @throws SerialiseException Wird geworfen, falls ein Fehler beim Serialisieren des Objektes auftritt.
 	 */
-	public Object serialise(Object object, String mainFileName) throws SerialiseException {
+	Object serialise(Object object, String mainFileName) throws SerialiseException {
 		executeBeforeSerialiseMethods(object, new HashMap<>());
 		return objectToJson(object, mainFileName);
 	}
@@ -85,7 +85,7 @@ public class SerialiseProcess {
 	 * @return Alle JSON-Dateien, die bei einer separaten Serialisierung in verschiedene Dateien zusätzlich
 	 * generiert werden
 	 */
-	public Map<String, JSONObject> getWholeSeparatedJson() {
+	Map<String, JSONObject> getWholeSeparatedJson() {
 		return wholeSeparatedJson;
 	}
 
@@ -236,8 +236,9 @@ public class SerialiseProcess {
 			throws SerialiseException {
 		JSONArray map = new JSONArray();
 		map.put(objectClass.getName() + "=" + objectHash);
-		for (Object objectMapKey : objectMap.keySet()) {
-			Object objectMapValue = objectMap.get(objectMapKey);
+		for (Map.Entry<?, ?> objectMapEntry : objectMap.entrySet()) {
+			Object objectMapKey = objectMapEntry.getKey();
+			Object objectMapValue = objectMapEntry.getValue();
 			JSONObject mapChild = new JSONObject();
 
 			String keyFileName = SerialiseUtils.getFileName(objectMapKey);

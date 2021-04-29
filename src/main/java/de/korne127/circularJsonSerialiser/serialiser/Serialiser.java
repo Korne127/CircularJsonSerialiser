@@ -80,12 +80,14 @@ public class Serialiser {
 		NO_WARNING,
 		/**
 		 * Falls eine Klasse eine neue Variable enthält, wird diese nicht gesetzt, aber es
-		 * wird eine Warnung ausgegeben.
+		 * wird eine Warnung mit Informationen über die neue Variable und in welchem Objekt sie
+		 * enthalten ist, ausgegeben.
 		 */
 		WARNING,
 		/**
 		 * Der Standard-Modus<br>
-		 * Falls eine Klasse eine neue Variable enthält, wird eine Exception geworfen.
+		 * Falls eine Klasse eine neue Variable enthält, wird eine {@link DeserialiseException} geworfen
+		 * und der Programmablauf unterbrochen.
 		 */
 		EXCEPTION
 	}
@@ -240,8 +242,8 @@ public class Serialiser {
 		}
 
 		Map<String, String> resultMap = new HashMap<>();
-		for (String key : json.keySet()) {
-			resultMap.put(key, json.get(key).toString());
+		for (Map.Entry<String, ?> entry : json.entrySet()) {
+			resultMap.put(entry.getKey(), entry.getValue().toString());
 		}
 		return resultMap;
 	}
@@ -292,13 +294,13 @@ public class Serialiser {
 				methodParameters, ignoreExceptionIDs, ignoreSetterIDs, collectionHandling, newVariableHandling);
 
 		Map<String, JSONObject> json = new HashMap<>();
-		for (String key : content.keySet()) {
-			json.put(key, new JSONObject(content.get(key)));
+		for (Map.Entry<String, String> entry : content.entrySet()) {
+			json.put(entry.getKey(), new JSONObject(entry.getValue()));
 		}
 
-		for (String key : json.keySet()) {
-			if (json.get(key).containsKey("Main")) {
-				return process.deserialise(json.get(key).get("Main"), json);
+		for (JSONObject value : json.values()) {
+			if (value.containsKey("Main")) {
+				return process.deserialise(value.get("Main"), json);
 			}
 		}
 		throw new DeserialiseException("The main object to deserialise could not be found.");

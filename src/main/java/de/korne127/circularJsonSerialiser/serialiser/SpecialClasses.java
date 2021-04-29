@@ -105,14 +105,10 @@ enum SpecialClasses {
 	//Unterklassen von Number
 	ATOMIC_INTEGER(AtomicInteger.class,
 			Object::toString,
-			string -> {
-				return new AtomicInteger(Integer.parseInt(string));
-			}),
+			string -> new AtomicInteger(Integer.parseInt(string))),
 	ATOMIC_LONG(AtomicLong.class,
 			Object::toString,
-			string -> {
-				return new AtomicLong(Integer.parseInt(string));
-			}),
+			string -> new AtomicLong(Integer.parseInt(string))),
 	BIG_INTEGER(BigInteger.class,
 			Object::toString,
 			BigInteger::new),
