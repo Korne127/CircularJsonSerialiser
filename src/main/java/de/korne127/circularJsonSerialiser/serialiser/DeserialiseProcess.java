@@ -291,10 +291,12 @@ class DeserialiseProcess {
 		String classValue = classInfos[1];
 		if (SpecialClasses.getClassMap().containsKey(className)) {
 			SpecialClasses specialClass = SpecialClasses.getClassMap().get(className);
-			Object result = specialClass.deserialise(classValue);
-			if (result == null) {
-				throw new DeserialiseException(fieldInformation.toString() + ", value: " + classValue +
-						" could not be deserialised.");
+			Object result;
+			try {
+				result = specialClass.deserialise(classValue);
+			} catch (Exception e) {
+				throw new DeserialiseException(fieldInformation.toString() + ", value: \"" + classValue +
+						"\" could not be deserialised.", e);
 			}
 			fieldInformation.remove();
 			return result;

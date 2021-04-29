@@ -284,10 +284,12 @@ class SerialiseProcess {
 	 */
 	private String specialClassToJson(Object object, Class<?> objectClass) throws SerialiseException {
 		SpecialClasses specialClass = SpecialClasses.getClassMap().get(objectClass.getName());
-		String result = specialClass.serialise(object);
-		if (result == null) {
+		String result;
+		try {
+			result = specialClass.serialise(object);
+		} catch (Exception e) {
 			throw new SerialiseException("The special class " + fieldInformation.toString() +
-					" could not be deserialised.");
+					" could not be serialised.", e);
 		}
 		return "#" + specialClass.getSpecialClassName() + "=" + result;
 	}

@@ -3,7 +3,6 @@ package de.korne127.circularJsonSerialiser.serialiser;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.text.DateFormat;
-import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.LocalTime;
 import java.time.ZonedDateTime;
@@ -18,7 +17,6 @@ import java.util.SimpleTimeZone;
 import java.util.TimeZone;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Function;
 
 /**
  * SpecialClasses-Enum:<br>
@@ -67,13 +65,7 @@ enum SpecialClasses {
 				Date date = (Date) object;
 				return new SimpleDateFormat("yyyy-MM-dd hh:mm:ss").format(date);
 			},
-			string -> {
-				try {
-					return new SimpleDateFormat("yyyy-MM-dd hh:mm:ss").parse(string);
-				} catch (ParseException e) {
-					return null;
-				}
-			}),
+			string ->  new SimpleDateFormat("yyyy-MM-dd hh:mm:ss").parse(string)),
 	GREGORIAN_CALENDAR(GregorianCalendar.class,
 			object -> {
 				GregorianCalendar gregorianCalendar = (GregorianCalendar) object;
@@ -84,12 +76,7 @@ enum SpecialClasses {
 			},
 			string -> {
 				String[] calendarInfos = string.split("\\|");
-				Date date;
-				try {
-					date = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss").parse(calendarInfos[0]);
-				} catch (ParseException e) {
-					return null;
-				}
+				Date date = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss").parse(calendarInfos[0]);
 				TimeZone timezone = new SimpleTimeZone(Integer.parseInt(calendarInfos[1]), calendarInfos[2]);
 				GregorianCalendar gregorianCalendar = new GregorianCalendar(timezone);
 				gregorianCalendar.setTime(date);
@@ -146,11 +133,32 @@ enum SpecialClasses {
 	}
 
 	/**
+	 * Dieses Interface repräsentiert eine Funktion, die ein Argument entgegennimmt und ein Argument
+	 * zurückgibt.<br>
+	 * Es wird benutzt, um die einzelnen SpecialClasses zu (de)serialisieren, in dem für jede eine Funktion
+	 * zur Serialisierung sowie eine zur Deserialisierung bereitgestellt ist.
+	 * Der Unterschied zur Java-eigenen {@link java.util.function.Function} ist, dass die
+	 * {@link #apply(Object)}-Methode dieser Funktion auch eine Exception werfen kann; somit kann beim Auftreten
+	 * eines Fehlers beim (De)Serialisieren die Ursache festgestellt werden.
+	 * @param <T> Der Typ der Eingabe der Funktion
+	 * @param <R> Der Typ der Ausgabe der Funktion
+	 */
+	private interface Function<T, R> {
+		/**
+		 * Wendet die Funktion an das angegebene Argument an.
+		 * @param t Das Argument der Funktion
+		 * @return Das Ergebnis der Funktion
+		 * @throws Exception Eine Exception, die beim Ausführen der Funktion geworfen werden kann
+		 */
+		R apply(T t) throws Exception;
+	}
+
+	/**
 	 * Wandelt eine angegebene Instanz der Klasse in einen String um.
 	 * @param object Die angegebene Instanz der Klasse
 	 * @return Der String, in den die angegebene Instanz der Klasse umgewandelt wurde
 	 */
-	String serialise(Object object) {
+	String serialise(Object object) throws Exception {
 		return classSerialiser.apply(object);
 	}
 
@@ -159,7 +167,7 @@ enum SpecialClasses {
 	 * @param string Der String, der Informationen über das Objekt enthält
 	 * @return Die Instanz der Klasse, in das der String umgewandelt wurde
 	 */
-	Object deserialise(String string) {
+	Object deserialise(String string) throws Exception {
 		return classDeserialiser.apply(string);
 	}
 
