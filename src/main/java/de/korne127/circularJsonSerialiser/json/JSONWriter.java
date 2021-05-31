@@ -16,11 +16,13 @@ public class JSONWriter {
 	 * Es wird dafür {@link #writeElement(Object, int) writeElement(object, 0)} aufgerufen und
 	 * zurückgegeben.
 	 * @param object Das Objekt, das als JSON-String zurückgegeben werden soll
+	 * @param compressed true - Der JSON-String, der zurückgegeben werden soll, soll komprimiert sein;<br>
+	 *                   false - Der JSON-String, der zurückgegeben werden soll, soll normal formatiert sein
 	 * @return Das angegebene Objekt als JSON-String
 	 * @throws IllegalStateException Wird geworfen, falls das Objekt nicht für JSON benutzbar ist.
 	 */
-	public static String writeElement(Object object) {
-		return writeElement(object, 1);
+	public static String writeElement(Object object, boolean compressed) {
+		return writeElement(object, compressed ? -1 : 1);
 	}
 
 	/**

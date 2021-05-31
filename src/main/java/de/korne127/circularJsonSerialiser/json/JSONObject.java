@@ -124,10 +124,14 @@ public class JSONObject implements JSONElement {
 
 	/**
 	 * Gibt einen formatierten String zurück, der alle Inhalte des JSON-Objektes beinhaltet.
-	 * @param indentFactor Die Anzahl an Tabs, die vor den Unterelementen gesetzt werden soll
+	 * @param indentFactor Die Anzahl an Tabs, die vor den Unterelementen gesetzt werden soll;<br>
+	 *                     -1, falls der String komprimiert sein soll
 	 * @return Ein formatierter String, der alle Inhalte des JSON-Objektes beinhaltet
 	 */
 	public String toString(int indentFactor) {
+		if (indentFactor == -1) {
+			return toCompressedString();
+		}
 		if (map.size() == 0) {
 			return "{}";
 		}
@@ -138,6 +142,23 @@ public class JSONObject implements JSONElement {
 					.append(JSONWriter.writeElement(value, indentFactor + 1)).append(",");
 		}
 		return json.substring(0, json.length() - 1) + "\n" + getTabs(indentFactor - 1) + "}";
+	}
+
+	/**
+	 * Gibt einen komprimierten String zurück, der alle Inhalte des JSON-Objektes beinhaltet.
+	 * @return Ein komprimierter String, der alle Inhalte des JSON-Objektes beinhaltet
+	 */
+	public String toCompressedString() {
+		if (map.size() == 0) {
+			return "{}";
+		}
+		StringBuilder json = new StringBuilder("{");
+		for (String key : keySet()) {
+			Object value = map.get(key);
+			json.append("\"").append(key).append("\":")
+					.append(JSONWriter.writeElement(value, -1)).append(",");
+		}
+		return json.substring(0, json.length() - 1) + "}";
 	}
 
 	/**

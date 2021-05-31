@@ -35,6 +35,7 @@ public class Serialiser {
 	private Set<String> ignoreSetterIDs;
 	private CollectionHandling collectionHandling;
 	private NewVariableHandling newVariableHandling;
+	private boolean compressedJson;
 
 	/**
 	 * Enum, das die verschiedenen Optionen, wie sich der Serialiser verhalten soll, wenn
@@ -117,6 +118,7 @@ public class Serialiser {
 		ignoreSetterIDs = new HashSet<>();
 		collectionHandling = CollectionHandling.CONVERT_WITH_WARNING;
 		newVariableHandling = NewVariableHandling.EXCEPTION;
+		compressedJson = false;
 	}
 
 	/**
@@ -190,7 +192,16 @@ public class Serialiser {
 		this.newVariableHandling = newVariableHandling;
 	}
 
-
+	/**
+	 * Überschreibt die Einstellung compressedJson, die bestimmt, ob die generierten JSON-Strings komprimiert
+	 * sein sollen.
+	 * @param compressedJson true - Die generierten JSON-Strings sollen komprimiert sein, also keine zusätzlichen
+	 *                       Leerzeichen, Zeilenumbrüche oder Tabulatoren beinhalten;<br>
+	 *                       false - Die generierten JSON-Strings sollen normal formatiert sein
+	 */
+	public void setCompressedJson(boolean compressedJson) {
+		this.compressedJson = compressedJson;
+	}
 
 	/**
 	 * Serialisiert das angegebene Objekt in ein JSON-Objekt, welches als String zurückgegeben wird.<br>
@@ -205,7 +216,7 @@ public class Serialiser {
 	public String serialiseObject(Object object) throws SerialiseException {
 		SerialiseProcess process = new SerialiseProcess(false, startSerialisingInSuperclass, methodParameters,
 				ignoreExceptionIDs);
-		return JSONWriter.writeElement(process.serialise(object, null));
+		return JSONWriter.writeElement(process.serialise(object, null), compressedJson);
 	}
 
 	/**
@@ -245,7 +256,7 @@ public class Serialiser {
 
 		Map<String, String> resultMap = new HashMap<>();
 		for (Map.Entry<String, JSONObject> entry : json.entrySet()) {
-			resultMap.put(entry.getKey(), entry.getValue().toString());
+			resultMap.put(entry.getKey(), JSONWriter.writeElement(entry.getValue(), compressedJson));
 		}
 		return resultMap;
 	}

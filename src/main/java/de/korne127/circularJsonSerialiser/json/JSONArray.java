@@ -110,10 +110,14 @@ public class JSONArray implements JSONElement {
 
 	/**
 	 * Gibt einen formatierten String zurück, der alle Inhalte des JSON-Arrays beinhaltet.
-	 * @param indentFactor Die Anzahl an Tabs, die vor den Unterelementen gesetzt werden soll
+	 * @param indentFactor Die Anzahl an Tabs, die vor den Unterelementen gesetzt werden soll;<br>
+	 *                     -1, falls der String komprimiert sein soll
 	 * @return Ein formatierter String, der alle Inhalte des JSON-Arrays beinhaltet
 	 */
 	public String toString(int indentFactor) {
+		if (indentFactor == -1) {
+			return toCompressedString();
+		}
 		if (list.isEmpty()) {
 			return "[]";
 		}
@@ -123,6 +127,21 @@ public class JSONArray implements JSONElement {
 					.append(JSONWriter.writeElement(object, indentFactor + 1)).append(",");
 		}
 		return json.substring(0, json.length() - 1) + "\n" + getTabs(indentFactor - 1) + "]";
+	}
+
+	/**
+	 * Gibt einen komprimierten String zurück, der alle Inhalte des JSON-Arrays beinhaltet.
+	 * @return Ein komprimierter String, der alle Inhalte des JSON-Arrays beinhaltet
+	 */
+	public String toCompressedString() {
+		if (list.isEmpty()) {
+			return "[]";
+		}
+		StringBuilder json = new StringBuilder("[");
+		for (Object object : list) {
+			json.append(JSONWriter.writeElement(object, -1)).append(",");
+		}
+		return json.substring(0, json.length() - 1) + "]";
 	}
 
 	/**
