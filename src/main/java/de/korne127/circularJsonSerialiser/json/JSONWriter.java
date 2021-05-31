@@ -51,7 +51,7 @@ public class JSONWriter {
 		}
 		if (SerialiseUtils.isSimpleType(object.getClass())) {
 			if (object instanceof Character) {
-				return "'" + object + "'";
+				return "'" + writeChar((char) object) + "'";
 			} else if (object instanceof Byte) {
 				return object + "B";
 			} else if (object instanceof Short) {

@@ -183,17 +183,7 @@ public class JSONReader {
 		for (int characterIterator = iteratorStart + 1; characterIterator < content.length(); characterIterator++) {
 			char character = content.charAt(characterIterator);
 			if (lastCharacter == '\\') {
-				switch (character) {
-					case 't': builder.append("\t"); break;
-					case 'b': builder.append("\b"); break;
-					case 'n': builder.append("\n"); break;
-					case 'r': builder.append("\r"); break;
-					case 'f': builder.append("\f"); break;
-					case '\"': builder.append("\""); break;
-					case '\'': builder.append("'"); break;
-					case '\\': builder.append("\\"); break;
-					default: throw new JsonParseException("String in JSON-String could not be parsed.");
-				}
+				builder.append(readSpecialChar(character, false));
 				lastCharacter = 0;
 			} else {
 				if (character == '\"') {
@@ -231,9 +221,18 @@ public class JSONReader {
 		} else if (content.startsWith("null")) {
 			value = null;
 			iteratorSkip = 4;
-		} else if (content.startsWith("'")) {
-			value = content.charAt(1);
-			iteratorSkip = 3;
+		} else if (content.charAt(0) == '\'') {
+			int characterEnding = 2;
+			if (content.charAt(1) == '\\') {
+				characterEnding++;
+				value = readSpecialChar(content.charAt(2), true);
+			} else {
+				value = content.charAt(1);
+			}
+			if (content.charAt(characterEnding) != '\'') {
+				throw new JsonParseException("Character in JSON-String could not be parsed.");
+			}
+			iteratorSkip = characterEnding + 1;
 		} else {
 			StringBuilder builder = new StringBuilder();
 			iteratorSkip = content.length();
@@ -299,6 +298,32 @@ public class JSONReader {
 			}
 		}
 		return new JSONResult(value, iteratorStart + iteratorSkip);
+	}
+
+	/**
+	 * Gibt das zu einem Zeichen gehörende Sonderzeichen zurück.<br>
+	 * Sonderzeichen werden als ein Backslash und ein bestimmtes Zeichen kodiert. Diese Methode
+	 * gibt das Sonderzeichen zurück, zu dem das angegebene Zeichen die Kodierung darstellt.
+	 * @param character Das Zeichen, das die Kodierung des Sonderzeichens darstellt
+	 * @param isCharacter true - Es wird aktuell ein Character eingelesen;<br>
+	 *                    false - Es wird aktuell ein String eingelesen
+	 * @return Das zu dem angegebenen Zeichen gehörende Sonderzeichen
+	 * @throws JsonParseException Wird geworfen, falls das angegebene Zeichen keine Kodierung eines
+	 * Sonderzeichens darstellt.
+	 */
+	private static char readSpecialChar(char character, boolean isCharacter) throws JsonParseException {
+		switch (character) {
+			case 't': return '\t';
+			case 'b': return '\b';
+			case 'n': return '\n';
+			case 'r': return '\r';
+			case 'f': return '\f';
+			case '\"': return '\"';
+			case '\'': return '\'';
+			case '\\': return '\\';
+			default: throw new JsonParseException((isCharacter ? "Character" : "String") +
+					" in JSON-String could not be parsed.");
+		}
 	}
 
 }
