@@ -14,6 +14,7 @@ import de.korne127.circularJsonSerialiser.exceptions.JsonParseException;
 import de.korne127.circularJsonSerialiser.exceptions.SerialiseException;
 import de.korne127.circularJsonSerialiser.json.JSONArray;
 import de.korne127.circularJsonSerialiser.json.JSONObject;
+import de.korne127.circularJsonSerialiser.json.JSONWriter;
 
 /**
  * Serialiser-Klasse:<br>
@@ -203,7 +204,7 @@ public class Serialiser {
 	public String serialiseObject(Object object) throws SerialiseException {
 		SerialiseProcess process = new SerialiseProcess(false, startSerialisingInSuperclass, methodParameters,
 				ignoreExceptionIDs);
-		return process.serialise(object, null).toString();
+		return JSONWriter.writeElement(process.serialise(object, null));
 	}
 
 	/**
@@ -242,7 +243,7 @@ public class Serialiser {
 		}
 
 		Map<String, String> resultMap = new HashMap<>();
-		for (Map.Entry<String, ?> entry : json.entrySet()) {
+		for (Map.Entry<String, JSONObject> entry : json.entrySet()) {
 			resultMap.put(entry.getKey(), entry.getValue().toString());
 		}
 		return resultMap;

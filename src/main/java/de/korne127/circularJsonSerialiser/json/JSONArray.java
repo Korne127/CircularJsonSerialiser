@@ -120,7 +120,7 @@ public class JSONArray implements JSONElement {
 		StringBuilder json = new StringBuilder("[");
 		for (Object object : list) {
 			json.append("\n").append(getTabs(indentFactor))
-					.append(elementToString(object, indentFactor)).append(",");
+					.append(JSONWriter.writeElement(object, indentFactor + 1)).append(",");
 		}
 		return json.substring(0, json.length() - 1) + "\n" + getTabs(indentFactor - 1) + "]";
 	}

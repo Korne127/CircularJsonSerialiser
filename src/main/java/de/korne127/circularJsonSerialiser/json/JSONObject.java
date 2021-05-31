@@ -135,7 +135,7 @@ public class JSONObject implements JSONElement {
 		for (String key : keySet()) {
 			Object value = map.get(key);
 			json.append("\n").append(getTabs(indentFactor)).append("\"").append(key).append("\": ")
-					.append(elementToString(value, indentFactor)).append(",");
+					.append(JSONWriter.writeElement(value, indentFactor + 1)).append(",");
 		}
 		return json.substring(0, json.length() - 1) + "\n" + getTabs(indentFactor - 1) + "}";
 	}

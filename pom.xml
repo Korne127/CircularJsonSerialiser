@@ -6,7 +6,7 @@
 
 	<groupId>de.korne127.circularjsonserialiser</groupId>
 	<artifactId>circular-json-serialiser</artifactId>
-	<version>1.1</version>
+	<version>1.2-SNAPSHOT</version>
 
 	<properties>
 		<maven.compiler.target>1.8</maven.compiler.target>
