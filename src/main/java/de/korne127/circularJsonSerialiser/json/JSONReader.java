@@ -34,7 +34,7 @@ public class JSONReader {
 	 * Objekt geparst werden konnte
 	 */
 	public static Object readElement(String content) throws JsonParseException {
-		content = content.replaceAll("[\\n\\t]", "");
+		content = content.replaceAll("[\\n\\t]", "").trim();
 		char character = content.charAt(0);
 
 		switch (character) {
