@@ -13,7 +13,7 @@ import de.korne127.circularJsonSerialiser.exceptions.JsonParseException;
  * und in JSON-Elemente umzuwandeln.
  * @author Korne127
  */
-class JSONReader {
+public class JSONReader {
 
 	/**
 	 * Enum, das den Status des Einlesens eines JSON-Elementes im JSON-String repräsentiert
@@ -27,13 +27,58 @@ class JSONReader {
 	}
 
 	/**
+	 * Transformiert einen JSON-String in das entsprechende für JSON benutzbare Objekt.
+	 * @param content Der JSON-String
+	 * @return Das für JSON benutzbare Objekt, das aus der Kodierung hergestellt wurde
+	 * @throws JsonParseException Wird geworfen, falls der String nicht aus dem für JSON benutzbaren
+	 * Objekt geparst werden konnte
+	 */
+	public static Object readElement(String content) throws JsonParseException {
+		content = content.replaceAll("[\\n\\t]", "");
+		char character = content.charAt(0);
+
+		switch (character) {
+			case '{': return readElement(content, true, 0).getValue();
+			case '[': return readElement(content, false, 0).getValue();
+			case '"': return readString(content, 0).getValue();
+			default:
+				try {
+					return readBasicType(content, 0).getValue();
+				} catch (JsonParseException e) {
+					throw new JsonParseException("The String is not a valid JSON-String and could not be parsed.");
+				}
+		}
+	}
+
+	/**
 	 * Transformiert einen bestimmten String mit der angegebenen Position, an der die
-	 * Kodierung eines JSON-Elementes startet in das JSON-Element
+	 * Kodierung eines für JSON benutzbaren Objektes startet in das entsprechende Objekt.
+	 * @param content Der String, in dem sich das kodierte für JSON benutzbare Objekt befindet
+	 * @param iteratorStart Die Position im String, an der das kodierte für JSON benutzbare Objekt beginnt
+	 * @return Ein JSONResult, welches aus dem für JSON benutzbaren Objekt, welches aus der Kodierung
+	 * hergestellt wurde, sowie der Position im String, an der die Kodierung dieses Objektes endet, besteht
+	 * @throws JsonParseException Wird geworfen, falls das für JSON benutzbare Objekt nicht aus dem JSON-String
+	 * geparst werden konnte.
+	 */
+	static JSONResult readElement(String content, int iteratorStart) throws JsonParseException {
+		char character = content.charAt(iteratorStart);
+
+		switch (character) {
+			case '{': return readElement(content, true, iteratorStart);
+			case '[': return readElement(content, false, iteratorStart);
+			case '"': return readString(content, iteratorStart);
+			default: return readBasicType(content, iteratorStart);
+		}
+	}
+
+	/**
+	 * Transformiert einen bestimmten String mit der angegebenen Position, an der die
+	 * Kodierung eines JSON-Elementes startet in dieses JSON-Element.
 	 * @param content Der String, in dem sich das kodierte JSON-Element befindet
 	 * @param iteratorStart Die Position im String, an der das kodierte JSON-Element beginnt
 	 * @return Ein JSONResult, welches aus dem JSON-Element, welches aus der Kodierung hergestellt
-	 * wurde sowie der Position im String, an der die Kodierung des JSON-Elementes endet, besteht
-	 * @throws JsonParseException Wird geworfen, falls das JSON-Element aus dem JSON-String nicht
+	 * wurde, sowie der Position im String, an der die Kodierung des JSON-Elementes endet, besteht
+	 * @throws JsonParseException Wird geworfen, falls das JSON-Element nicht aus dem JSON-String
 	 * geparst werden konnte.
 	 */
 	static JSONResult readElement(String content, boolean isObject, int iteratorStart) throws JsonParseException {
@@ -77,13 +122,10 @@ class JSONReader {
 					break;
 				case VALUE:
 					JSONResult result;
-					switch (character) {
-						case ' ': continue;
-						case '{': result = readElement(content, true, characterIterator); break;
-						case '[': result = readElement(content, false, characterIterator); break;
-						case '"': result = readString(content, characterIterator); break;
-						default: result = readBasicType(content, characterIterator); break;
+					if (character == ' ') {
+						continue;
 					}
+					result = readElement(content, characterIterator);
 					value = result.getValue();
 					characterIterator = result.getEndPosition() - 1;
 					state = ElementReadingState.AFTER_VALUE;
@@ -122,12 +164,12 @@ class JSONReader {
 
 	/**
 	 * Transformiert einen bestimmten String mit der angegebenen Position, an der die
-	 * Kodierung eines Strings startet in diesen String
+	 * Kodierung eines Strings startet in diesen String.
 	 * @param content Der String, in dem sich der kodierte String befindet
 	 * @param iteratorStart Die Position im String, an der der kodierte String beginnt
 	 * @return Ein JSONResult, welches aus dem String, welcher aus der Kodierung hergestellt
-	 * wurde sowie der Position im String, an der die Kodierung des Strings endet, besteht
-	 * @throws JsonParseException Wird geworfen, falls der String aus dem JSON-String nicht
+	 * wurde, sowie der Position im String, an der die Kodierung des Strings endet, besteht
+	 * @throws JsonParseException Wird geworfen, falls der String nicht aus dem JSON-String
 	 * geparst werden konnte.
 	 */
 	private static JSONResult readString(String content, int iteratorStart) throws JsonParseException {
@@ -167,12 +209,12 @@ class JSONReader {
 
 	/**
 	 * Transformiert einen bestimmten String mit der angegebenen Position, an der die
-	 * Kodierung eines primitiven Typen startet in den primitiven Datentypen.
+	 * Kodierung eines primitiven Typen startet in diesen primitiven Datentypen.
 	 * @param content Der String, in dem sich der primitive Datentyp befindet
 	 * @param iteratorStart Die Position im String, an der der primitive Datentyp beginnt
 	 * @return Ein JSONResult, welches aus dem primitiven Datentypen, welches aus der Kodierung
-	 * hergestellt wurde sowie der Position im String, an der die Kodierung des Typen endet, besteht
-	 * @throws JsonParseException Wird geworfen, falls die Nummer aus dem JSON-String nicht geparst
+	 * hergestellt wurde, sowie der Position im String, an der die Kodierung des Typen endet, besteht
+	 * @throws JsonParseException Wird geworfen, falls der primitive Typ nicht aus dem JSON-String geparst
 	 * werden konnte.
 	 */
 	private static JSONResult readBasicType(String content, int iteratorStart) throws JsonParseException {

@@ -17,7 +17,7 @@ public class JSONWriter {
 	 * zurückgegeben.
 	 * @param object Das Objekt, das als JSON-String zurückgegeben werden soll
 	 * @return Das angegebene Objekt als JSON-String
-	 * @throws IllegalStateException Falls das Objekt nicht für JSON benutzbar ist
+	 * @throws IllegalStateException Wird geworfen, falls das Objekt nicht für JSON benutzbar ist.
 	 */
 	public static String writeElement(Object object) {
 		return writeElement(object, 1);
@@ -37,7 +37,7 @@ public class JSONWriter {
 	 * @param object Das Objekt, das als JSON-String zurückgegeben werden soll
 	 * @param currentIndentFactor Die aktuelle Einrückungstiefe
 	 * @return Das angegebene Objekt als JSON-String
-	 * @throws IllegalStateException Falls das Objekt nicht für JSON benutzbar ist
+	 * @throws IllegalStateException Wird gewofen, falls das Objekt nicht für JSON benutzbar ist.
 	 */
 	static String writeElement(Object object, int currentIndentFactor) {
 		if (object == null) {
