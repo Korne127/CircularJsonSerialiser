@@ -1,4 +1,4 @@
-# CircularJsonSerialiser v1.1
+# CircularJsonSerialiser v1.2
 ## Allgemein
 CircularJsonSerialiser ist ein Serialiser für Java mit dem Ziel, dass ohne manuelle Konfiguration alle Klassen-
 und Objektstrukturen korrekt gespeichert und identisch wiederhergestellt werden.<br>
@@ -10,16 +10,27 @@ Auch die Art primitiver Datentypen wie z. B. Zahlen oder Datenstrukturen wie z. 
 sodass nach dem Deserialisieren keine Cast Exceptions durch falsch wiederhergestellte Objekte zu erwarten sind.
 
 ## Benutzen des Serialisers
-Um den CircularJsonSerialiser in ein Projekt einzubinden, muss in der pom.xml die folgende Dependency hinzugefügt
+Um den CircularJsonSerialiser in ein Maven-Projekt einzubinden, muss in der pom.xml die folgende Dependency hinzugefügt
 werden:
 
 ```xml
 <dependency>
     <groupId>de.korne127.circularjsonserialiser</groupId>
     <artifactId>circular-json-serialiser</artifactId>
-    <version>1.1</version>
+    <version>1.2</version>
 </dependency>
 ```
+
+Dasselbe gilt äquivalent für ein Gradle-Projekt:
+
+```gradle
+implementation 'de.korne127.circularjsonserialiser:circular-json-serialiser:1.2'
+```
+
+Falls ein anderes Build-Management-Tool verwendet wird, das ebenfalls auf das zentrale Maven-Repository zugreifen
+kann, kann man
+[hier](https://search.maven.org/artifact/de.korne127.circularjsonserialiser/circular-json-serialiser/1.2/jar)
+den Code nachschauen, um die Dependency entsprechend hinzuzufügen.
 
 Alternativ kann auch die .jar-Datei des neuesten Releases heruntergeladen und manuell dem Projekt in der IDE
 hinzugefügt werden.
@@ -214,6 +225,14 @@ Dies ist die standardmäßige Einstellung.
 
 Die Einstellung newVariableHandling lässt sich mit `setNewVariableHandling(NewVariableHandling)` überschreiben.
 
+### compressedJson
+Standardmäßig werden die generierten JSON-Strings mit Leerzeichen, Zeilenumbrüchen und Tabulatoren versehen,
+um die Objekt- und Array-Strukturen hierarchisch anzuordnen und für den Leser übersichtlich und einfach
+lesbar zu machen. Alternativ können aber auch komprimierte JSON-Strings generiert werden, die keine Leerzeichen,
+Zeilenumbrüche oder Tabulatoren besitzen. Dies kann z.B. in Situationen mit begrenztem Speicherplatz
+vorteilhaft sein.<br>
+Dieses Verhalten kann mit `setCompressedJson(boolean)` angepasst werden.
+
 ## Annotationen und Exceptions
 Folgende Annotations und Exceptions existieren:
 
@@ -400,9 +419,9 @@ werden. Dies lässt sich in der Konfiguration einstellen.
 JSON wurde ursprünglich für Javascript entwickelt und ist auf die Bedürfnisse dieser Sprache angepasst. Der
 JSON-Parser dieses Serialisers weicht in einigen Punkten von dem offiziellen JSON-Standard ab, da er für diesen
 Serialiser und dessen Aufgaben speziell optimiert ist:
-- Chars werden als Zeichen zwischen einem '-Paar kodiert
-- '-Zeichen innerhalb Strings werden daher mit einem Backslash (\\) escaped
-- Schrägstriche (/) in Strings werden nicht mit einem Backslash escaped
+- Chars werden als einzelne Zeichen zwischen einem '-Paar kodiert
+- '-Zeichen werden daher mit einem Backslash (\\) escaped
+- Schrägstriche (/) werden nicht mit einem Backslash escaped
 - Die Zahlenwerte NaN, Infinity und -Infinity werden gespeichert und wiederhergestellt
 - Bytes wird am Ende der Zahl ein B, Shorts ein S, Longs ein L und Floats ein F hinzugefügt
 
